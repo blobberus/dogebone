@@ -1,0 +1,11 @@
+# Core: the pipeline only needs these
+pandas>=2.0
+numpy>=1.24
+matplotlib>=3.7
+
+# Notebook runtime
+jupyterlab>=4.0
+ipykernel>=6.0
+
+# Optional: generic-sentiment baseline used for comparison in the notebook (skipped if missing)
+# vaderSentiment>=3.3

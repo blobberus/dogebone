@@ -1,0 +1,144 @@
+"""Presentation-ready matplotlib charts. Polarity uses a diverging blue (bullish) / red (bearish) pair."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from matplotlib.ticker import FuncFormatter, PercentFormatter
+
+SURFACE, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
+UP, DOWN, NEUTRAL = "#2a78d6", "#e34948", "#898781"
+ACCENT = "#6250d6"  # model accuracy (not a polarity)
+DIR_COLORS = {"UP": UP, "DOWN": DOWN, "NEUTRAL": NEUTRAL}
+DIR_LABELS = {"UP": "Bullish call", "DOWN": "Bearish call", "NEUTRAL": "No call"}
+
+
+def use_style() -> None:
+    plt.rcParams.update(
+        {
+            "figure.facecolor": SURFACE, "axes.facecolor": SURFACE, "savefig.facecolor": SURFACE,
+            "axes.edgecolor": AXIS, "axes.labelcolor": INK2, "axes.titlecolor": INK,
+            "axes.titlesize": 13, "axes.titleweight": "semibold", "axes.titlelocation": "left",
+            "axes.labelsize": 10, "axes.spines.top": False, "axes.spines.right": False,
+            "axes.grid": True, "axes.axisbelow": True, "grid.color": GRID, "grid.linewidth": 0.8, "grid.linestyle": "-",
+            "xtick.color": MUTED, "ytick.color": MUTED, "xtick.labelsize": 9, "ytick.labelsize": 9,
+            "legend.frameon": False, "legend.fontsize": 9, "legend.labelcolor": INK2,
+            "lines.linewidth": 2, "lines.solid_capstyle": "round", "lines.solid_joinstyle": "round",
+            "font.family": ["Segoe UI", "DejaVu Sans", "sans-serif"], "figure.dpi": 110,
+        }
+    )
+
+
+def save(fig, name: str, *dirs: Path) -> list[Path]:
+    paths = []
+    for d in dirs:
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / f"{name}.png"
+        fig.savefig(p, dpi=200, bbox_inches="tight")
+        paths.append(p)
+    return paths
+
+
+def price_with_signals(returns: pd.DataFrame, daily: pd.DataFrame, events: pd.DataFrame, start, end, max_events: int = 8):
+    fig, ax = plt.subplots(figsize=(12, 5))
+    px = returns.loc[start:end, "close"]
+    ax.plot(px.index, px.values, color=INK2, linewidth=1.6, label="DOGE close (USD)")
+    d = daily[(daily["anchor_date"] >= pd.Timestamp(start)) & (daily["anchor_date"] <= pd.Timestamp(end))]
+    d = d[d["direction"] != "NEUTRAL"].merge(returns[["close"]], left_on="anchor_date", right_index=True)
+    for dir_, color in [("UP", UP), ("DOWN", DOWN)]:
+        s = d[d["direction"] == dir_]
+        ax.scatter(s["anchor_date"], s["close"], s=20 + 120 * s["conviction"], color=color, edgecolor=SURFACE,
+                   linewidth=1.5, alpha=0.85, zorder=3, label=DIR_LABELS[dir_])
+    ev = events[(events["date"] >= pd.Timestamp(start)) & (events["date"] <= pd.Timestamp(end))].head(max_events)
+    ymax = px.max()
+    for _, e in ev.iterrows():
+        ax.axvline(e["date"], color=AXIS, linewidth=1, zorder=1)
+        ax.text(e["date"], ymax, " " + str(e["label"]), rotation=90, va="top", ha="left", fontsize=7.5, color=MUTED)
+    ax.set_yscale("log")
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"${v:.2f}"))
+    ax.set_title("DOGE price with daily post-sentiment calls (marker size = conviction)")
+    ax.set_ylabel("Close, log scale")
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    return fig
+
+
+def hit_rate_by_conviction(table: pd.DataFrame, title: str = "Hit rate by conviction"):
+    """table: rows per (conviction_bucket, horizon_d) with hit_rate, null_hit_rate, n_calls."""
+    horizons = sorted(table["horizon_d"].unique())
+    fig, axes = plt.subplots(1, len(horizons), figsize=(4 * len(horizons), 3.8), sharey=True, squeeze=False)
+    order = [c for c in ["LOW", "MEDIUM", "HIGH"] if c in set(table["conviction_bucket"])]
+    for ax, h in zip(axes[0], horizons):
+        t = table[table["horizon_d"] == h].set_index("conviction_bucket").reindex(order)
+        x = range(len(order))
+        ax.bar(x, t["hit_rate"], width=0.5, color=ACCENT, zorder=2)
+        null = t["null_hit_rate"].mean()
+        ax.axhline(null, color=INK2, linewidth=1.2, zorder=3)
+        ax.text(len(order) - 0.5, null, f"no-skill {null:.0%}", va="bottom", ha="right", fontsize=8, color=INK2)
+        for xi, (hr, n) in enumerate(zip(t["hit_rate"], t["n_calls"])):
+            if pd.notna(hr):
+                ax.text(xi, hr + 0.01, f"{hr:.0%}\nn={int(n)}", ha="center", va="bottom", fontsize=8.5, color=INK)
+        ax.set_xticks(list(x), [o.title() for o in order])
+        ax.set_title(f"{h}-day horizon", fontsize=11)
+        ax.set_ylim(0, 1)
+        ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+        ax.grid(axis="x", visible=False)
+    axes[0][0].set_ylabel("Directional hit rate")
+    fig.suptitle(title, x=0.01, ha="left", fontsize=13, fontweight="semibold", color=INK)
+    fig.tight_layout()
+    return fig
+
+
+def event_study(paths: pd.DataFrame, title: str = "Average DOGE path around posts"):
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    for grp in ["UP", "NEUTRAL", "DOWN"]:
+        p = paths[paths["group"] == grp]
+        if p.empty:
+            continue
+        c = DIR_COLORS[grp]
+        ax.plot(p["day"], p["mean"], color=c, label=f"{DIR_LABELS[grp]} (n={int(p['n'].max())})")
+        ax.fill_between(p["day"], p["mean"] - p["sem"], p["mean"] + p["sem"], color=c, alpha=0.1, linewidth=0)
+        last = p.iloc[-1]
+        ax.text(last["day"] + 0.2, last["mean"], f"{last['mean']:+.1%}", va="center", fontsize=8.5, color=INK2)
+    ax.axvline(0, color=AXIS, linewidth=1)
+    ax.axhline(0, color=AXIS, linewidth=1)
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
+    ax.set_xlabel("Days from anchor close (0 = last close before the post)")
+    ax.set_ylabel("Cumulative return")
+    ax.set_title(title)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    return fig
+
+
+def keyword_bars(stats: pd.DataFrame, top: int = 10, title: str = "Keywords that preceded moves (training period)"):
+    s = pd.concat([stats.nlargest(top, "z"), stats.nsmallest(top, "z")]).drop_duplicates("term")
+    s = s.sort_values("log_odds")
+    fig, ax = plt.subplots(figsize=(8, 0.32 * len(s) + 1.2))
+    colors = [UP if v > 0 else DOWN for v in s["log_odds"]]
+    ax.barh(s["term"], s["log_odds"], height=0.6, color=colors, zorder=2)
+    for y, (v, n) in enumerate(zip(s["log_odds"], s["n"])):
+        ax.text(v + (0.03 if v > 0 else -0.03), y, f"n={int(n)}", va="center", ha="left" if v > 0 else "right",
+                fontsize=8, color=MUTED)
+    ax.axvline(0, color=AXIS, linewidth=1)
+    ax.set_xlabel("Log-odds of next move being UP vs. base rate  (blue = bullish, red = bearish)")
+    ax.set_title(title)
+    ax.grid(axis="y", visible=False)
+    fig.tight_layout()
+    return fig
+
+
+def equity_curves(eq: pd.DataFrame, title: str = "Illustrative: following the daily call (1-day hold, no costs)"):
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(eq.index, eq["buy_and_hold"], color=INK2, linewidth=1.6, label="Buy & hold DOGE")
+    ax.plot(eq.index, eq["follow_signal"], color=ACCENT, label="Follow post-sentiment call")
+    for col in ["buy_and_hold", "follow_signal"]:
+        ax.text(eq.index[-1], eq[col].iloc[-1], f"  {eq[col].iloc[-1]:.2f}x", va="center", fontsize=8.5, color=INK2)
+    ax.axhline(1, color=AXIS, linewidth=1)
+    ax.set_ylabel("Growth of $1")
+    ax.set_title(title)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    return fig
