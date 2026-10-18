@@ -1,8 +1,8 @@
 """Generate SYNTHETIC prices and posts so the pipeline runs end-to-end before real data lands.
 
-The posts carry a *planted* signal: about 60% of posts lean in the direction of the next 1-3 day move,
-and some "echo" posts just describe the previous move. A working pipeline should recover roughly
-that edge. If it reports far more, something is leaking future information.
+The posts carry a *planted* signal: most opinionated posts lean toward the next day's move 62% of the
+time, while "echo" posts just describe the day's move so far. A working pipeline should recover a
+1-day hit rate of about 55-60%. If it reports far more, something is leaking future information.
 
 Columns deliberately mimic real exports (Yahoo-style prices, Apify-style tweets) to exercise the loaders.
 
@@ -75,8 +75,8 @@ def main():
     in_window = (dates >= "2021-01-01") & (dates <= "2022-12-31")
     rates = (accounts["influence_weight"] / accounts["influence_weight"].max() * 0.35 + 0.05).to_numpy()
     for i in np.where(in_window)[0]:
-        fwd = doge_r[i + 1 : i + 3].sum()  # the planted "future" move the post leans toward
-        back = doge_r[i - 1]
+        fwd = doge_r[i + 1]  # the planted "future" move (the next daily return after the anchor close)
+        back = doge_r[i]  # the move already visible when the post goes out
         for (_, acc), rate in zip(accounts.iterrows(), rates):
             for _ in range(rng.poisson(rate)):
                 roll = rng.random()
@@ -86,8 +86,8 @@ def main():
                     text = rng.choice(NEUTRAL)
                 elif roll < 0.40:  # momentum echo: describes yesterday's move
                     text = rng.choice(BULLISH if back > 0 else BEARISH)
-                else:  # planted predictive signal, 60% accurate
-                    leans_up = (fwd > 0) if rng.random() < 0.60 else (fwd <= 0)
+                else:  # planted predictive signal, 62% accurate
+                    leans_up = (fwd > 0) if rng.random() < 0.62 else (fwd <= 0)
                     text = rng.choice(BULLISH if leans_up else BEARISH)
                 hour = int(rng.integers(12, 24))  # after midday UTC so the move lands after the anchor close
                 ts = dates[i] + pd.Timedelta(hours=hour, minutes=int(rng.integers(0, 60)))

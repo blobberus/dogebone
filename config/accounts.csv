@@ -1,0 +1,16 @@
+tier,rank,handle,display_name,category,influence_weight,expected_doge_volume,default_context,in_window_from,collection_note
+primary,1,elonmusk,Elon Musk,market_mover,3.0,high,ambiguous,2021-01-01,"Many DOGE posts are image-only memes with little text; some big moves came from posts that never say DOGE (Oct 2022 'the bird is freed')"
+primary,2,dogecoin,Dogecoin,official,1.0,high,coin,2021-01-01,Official community account
+primary,3,BillyM2k,Shibetoshi Nakamoto (Billy Markus),founder_insider,1.0,high,ambiguous,2021-01-01,"Co-creator; Foundation memes advisor from Aug 2021; mostly jokes, sentiment is hard to read"
+primary,4,mcuban,Mark Cuban,market_mover,1.0,medium,coin,2021-01-01,Mavericks began accepting DOGE 2021-03-04
+primary,5,CEOAdam,Adam Aron (AMC CEO),institutional,0.8,medium,coin,2021-01-01,"DOGE poll Sep 2021, gift cards Oct 2021, app payments Apr 2022; often pairs DOGE with SHIB and AMC stock posts"
+primary,6,MattWallace888,Matt Wallace,community_influencer,0.7,high,coin,2021-01-01,Loudest 2021 DOGE promoter; 'Accept Doge' token rug-pull accusations Mar 2022
+primary,7,genesimmons,Gene Simmons,celebrity,0.8,low,coin,2021-02-01,Burst account: posts cluster Feb 1-9 2021 around the Feb 7-8 record
+primary,8,DogecoinFdn,Dogecoin Foundation,official,0.7,medium,coin,2021-08-01,Relaunched Aug 2021 (no posts before); use DogecoinFdn not DogeFoundation
+primary,9,dogecoin_devs,Dogecoin Developers,official,0.7,low,coin,2021-01-01,Core dev release announcements (e.g. 1.14.5 fee cut Nov 2021)
+primary,10,whale_alert,Whale Alert,onchain_tracker,0.6,medium,coin,2021-01-01,Multi-asset bot; keep only #DOGE / Dogecoin alerts
+alternate,A1,SnoopDogg,Snoop Dogg,celebrity,0.8,low,ambiguous,2021-02-01,"'Snoop Doge' Feb 7 2021; 'Dogg' vs 'doge' collides in keyword search"
+alternate,A2,JRossNicoll,Ross Nicoll,founder_insider,0.5,medium,coin,2021-01-01,Core dev; stepped back to advisor 2022-02-16
+alternate,A3,DogecoinRise,Dogecoin Rise,community_influencer,0.5,high,coin,2021-01-01,DOGE-only retail hype account created Jan 2021; read as a momentum/hype signal
+alternate,A4,alicharts,Ali Charts (Ali Martinez),analyst,0.5,low,coin,2021-01-01,"Posted as ali_charts in 2021-22 (renamed later); pull by numeric user ID. DOGE focus grew mostly from 2023"
+alternate,A5,mishaboar,Mishaboar,community_influencer,0.4,high,coin,2021-04-01,"Joined Apr 2021; DOGE-only, low-hype commentary"
