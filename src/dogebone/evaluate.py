@@ -76,6 +76,23 @@ def evaluate(df: pd.DataFrame, horizons, by: str | list | None = None, **kw) -> 
     return pd.DataFrame(rows)
 
 
+def attention_test(returns: pd.DataFrame, post_dates, horizon: int, start, end) -> dict:
+    """Is it the words, or just the mention? Compare forward returns after post days with every day in the window."""
+    r = returns.loc[start:end, f"fwd_ret_{horizon}d"].dropna()
+    on = r[r.index.isin(pd.DatetimeIndex(post_dates))]
+    k, n = int((on > 0).sum()), len(on)
+    p_all = float((r > 0).mean())
+    return {
+        "horizon_d": horizon,
+        "n_post_days": n,
+        "up_rate_post_days": k / n if n else np.nan,
+        "up_rate_all_days": p_all,
+        "p_value": binom_sf(k, n, p_all) if n else np.nan,
+        "mean_ret_post_days": on.mean(),
+        "mean_ret_all_days": r.mean(),
+    }
+
+
 def term_stats(df: pd.DataFrame, horizon: int, cfg: Config, text_col: str = "text") -> pd.DataFrame:
     """Which keywords precede UP vs DOWN moves? Smoothed log-odds ratio vs. the base rate, with z-scores."""
     actual, ret = f"actual_{horizon}d", f"fwd_ret_{horizon}d"

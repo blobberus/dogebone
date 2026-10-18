@@ -9,6 +9,9 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
+# Downloaded third-party archives (re-fetch with scripts/fetch_musk_tweets.py)
+data/external/
+
 # Generated outputs (regenerate by running the notebook)
 data/processed/*
 !data/processed/.gitkeep

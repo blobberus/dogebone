@@ -8,7 +8,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from matplotlib.ticker import FuncFormatter, PercentFormatter
+from matplotlib.ticker import FuncFormatter, LogLocator, PercentFormatter
 
 SURFACE, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 UP, DOWN, NEUTRAL = "#2a78d6", "#e34948", "#898781"
@@ -102,6 +102,7 @@ def price_with_signals(returns: pd.DataFrame, daily: pd.DataFrame, events: pd.Da
         fig.text(0.01, -0.01, textwrap.fill(key, 190), fontsize=8, color=MUTED, ha="left", va="top")
     ax.set_yscale("log")
     ax.yaxis.set_major_formatter(FuncFormatter(_usd))
+    ax.yaxis.set_minor_locator(LogLocator(base=10, subs=(2, 5)))  # label 2x and 5x only; full minors collide
     ax.yaxis.set_minor_formatter(FuncFormatter(_usd))
     which = " / ".join(b.lower() for b in buckets) + "-conviction" if buckets else "all"
     ax.set_title(f"DOGE price with {which} daily post-sentiment calls (marker size = conviction)", pad=28)
@@ -160,7 +161,7 @@ def event_study(paths: pd.DataFrame, title: str = "Average DOGE path around post
 
 
 def keyword_bars(stats: pd.DataFrame, top: int = 10, title: str = "Keywords that preceded moves (training period)"):
-    s = pd.concat([stats.nlargest(top, "z"), stats.nsmallest(top, "z")]).drop_duplicates("term")
+    s = pd.concat([stats[stats["z"] > 0].nlargest(top, "z"), stats[stats["z"] < 0].nsmallest(top, "z")])
     s = s.sort_values("log_odds")
     fig, ax = plt.subplots(figsize=(8, 0.32 * len(s) + 1.2))
     colors = [UP if v > 0 else DOWN for v in s["log_odds"]]

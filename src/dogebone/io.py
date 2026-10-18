@@ -189,7 +189,10 @@ def load_tweets(paths: list[Path], cfg: Config) -> pd.DataFrame:
     df = df.sort_values("created_at").reset_index(drop=True)
     df.attrs["n_dropped"] = n0 - len(df)
     df.attrs["date_only"] = bool((df["created_at"].dt.floor("D") == df["created_at"]).all())
-    keep = ["tweet_id", "created_at", "username", "text", "like_count", "retweet_count", "is_retweet", "source_file"]
+    keep = [
+        "tweet_id", "created_at", "username", "text", "like_count", "retweet_count", "is_retweet",
+        "message_type", "relevance", "permalink", "source_file",
+    ]
     return df[[c for c in keep if c in df.columns]]
 
 

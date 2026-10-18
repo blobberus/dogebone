@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-URL_RE = re.compile(r"https?://\S+|www\.\S+")
+# Also catches scheme-less links some exports use: "pic.twitter.com/abc", "m.youtube.com/watch?v=…"
+URL_RE = re.compile(r"https?://\S+|www\.\S+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}/\S*", re.IGNORECASE)
 # Skin tones, variation selectors, and zero-width joiners carry no sentiment; drop them so emoji match.
 EMOJI_NOISE_RE = re.compile("[\U0001F3FB-\U0001F3FF︎️‍]")
 EMOJI_CLASS = "[\U0001F000-\U0001FAFF☀-➿⬀-⯿]"

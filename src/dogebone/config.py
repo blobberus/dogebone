@@ -13,9 +13,10 @@ class Config:
     # --- Data -------------------------------------------------------------------------------
     data_mode: str = "auto"  # "auto" (raw if present, else sample) | "raw" | "sample"
     analysis_start: str = "2021-01-01"
-    analysis_end: str = "2022-12-31"
-    # Calibrate on 2021 (bubble), test out-of-sample on 2022 (bear market): a deliberate regime-shift test.
-    train_end: str = "2021-12-31"
+    analysis_end: str = "2021-12-31"
+    # Calibrate on Jan-Aug (the mania and the SNL crash), test out-of-sample on Sep-Dec.
+    train_end: str = "2021-08-31"
+    min_test_days: int = 40  # below this many called test days, headline numbers use the full window
     include_retweets: bool = False
     # CoinGecko-style files stamp the 00:00 UTC snapshot, which is the *previous* day's close.
     price_is_start_of_day_snapshot: bool = False

@@ -36,18 +36,27 @@ def write_findings(
     data_mode: str,
     focus_h: int,
     daily_by_period: pd.DataFrame,
-    daily_by_conviction_test: pd.DataFrame,
+    daily_by_conviction: pd.DataFrame,
     posts_by_account: pd.DataFrame,
     learned_vs_lexicon: pd.DataFrame,
     term_table: pd.DataFrame,
     n_posts: int,
     n_accounts: int,
     figures: list[str],
+    attention: pd.DataFrame | None = None,
+    coverage: dict | None = None,
 ) -> str:
-    train_label = f"the {cfg.analysis_start[:4]} calibration period"
-    test_label = f"out-of-sample {pd.Timestamp(cfg.train_end).year + 1} data"
+    test_start = pd.Timestamp(cfg.train_end) + pd.Timedelta(days=1)
+    train_label = f"the {pd.Timestamp(cfg.analysis_start):%b %Y}–{pd.Timestamp(cfg.train_end):%b %Y} calibration period"
+    test_label = f"out-of-sample {test_start:%b}–{pd.Timestamp(cfg.analysis_end):%b %Y} data"
+    full_label = (f"the full window ({pd.Timestamp(cfg.analysis_start):%b}–{pd.Timestamp(cfg.analysis_end):%b %Y}; "
+                  "the hand-crafted lexicon has no parameters fit to this data)")
     test = _row(daily_by_period, period="test", horizon_d=focus_h)
     train = _row(daily_by_period, period="train", horizon_d=focus_h)
+    full = _row(daily_by_period, period="all", horizon_d=focus_h)
+    # Too few out-of-sample days to say anything: lead with the full window and show the test slice beside it.
+    use_full = full is not None and (test is None or test["n_calls"] < cfg.min_test_days)
+    head, head_label, head_period = (full, full_label, "all") if use_full else (test, test_label, "test")
 
     lines = []
     if data_mode != "raw":
@@ -67,40 +76,65 @@ def write_findings(
         "## Headline (use this as the slide-3 title)",
         "",
     ]
-    if test is not None:
-        lines.append(f"- {headline_sentence(test, focus_h, test_label)}")
-    if train is not None:
-        lines.append(f"- For comparison, {train_label}: {_pct(train['hit_rate'])} vs. {_pct(train['null_hit_rate'])} no-skill.")
+    if head is not None:
+        lines.append(f"- {headline_sentence(head, focus_h, head_label)}")
+    for row, label in [(train, train_label), (test, test_label)]:
+        if row is not None and row is not head:
+            lines.append(
+                f"- Split view, {label}: {_pct(row['hit_rate'])} vs. {_pct(row['null_hit_rate'])} no-skill "
+                f"(n = {int(row['n_calls'])} days{'; too few to conclude' if row['n_calls'] < cfg.min_test_days else ''})."
+            )
     lines += ["", "## Supporting findings (pick 2 for the slides)", ""]
 
-    if test is not None:
-        mom = test["momentum_hit_rate"]
-        beat = "beat" if test["hit_rate"] > mom else "did **not** beat"
+    if coverage:
+        lines.append(
+            f"- **Coverage:** only {coverage['posts_with_terms']} of {coverage['posts']} posts "
+            f"({coverage['posts_with_terms'] / max(coverage['posts'], 1):.0%}) contained a sentiment keyword, so only "
+            f"{coverage['called_days']} of {coverage['post_days']} post days got a call. Most DOGE posts here are terse "
+            "(a bare 'Doge', an emoji, a meme)."
+        )
+    if attention is not None and not attention.empty:
+        a = attention[attention["horizon_d"] == focus_h]
+        if not a.empty:
+            a = a.iloc[0]
+            sig = "significant" if a["p_value"] < 0.05 else "not significant"
+            lines.append(
+                f"- **Attention vs. words:** regardless of wording, DOGE rose over the next {focus_h}d after "
+                f"**{_pct(a['up_rate_post_days'])}** of post days vs. **{_pct(a['up_rate_all_days'])}** of all days "
+                f"(mean {a['mean_ret_post_days']:+.2%} vs. {a['mean_ret_all_days']:+.2%}; n = {int(a['n_post_days'])} days, "
+                f"p = {a['p_value']:.3f}, {sig})."
+            )
+
+    if head is not None:
+        mom = head["momentum_hit_rate"]
+        beat = "beat" if head["hit_rate"] > mom else "did **not** beat"
         lines.append(
             f"- **Momentum check:** sentiment {beat} a simple 'yesterday's direction continues' rule "
-            f"({_pct(test['hit_rate'])} vs. {_pct(mom)}). If it didn't, posts are mostly *echoing* price, not leading it."
+            f"({_pct(head['hit_rate'])} vs. {_pct(mom)}). If it didn't, posts are mostly *echoing* price, not leading it."
         )
         lines.append(
-            f"- **Magnitude:** after bullish calls DOGE averaged {test['mean_ret_when_up']:+.2%} over {focus_h}d; after bearish calls "
-            f"{test['mean_ret_when_down']:+.2%} (spread {test['spread_pp']:+.1f} pp)."
+            f"- **Magnitude:** after bullish calls DOGE averaged {head['mean_ret_when_up']:+.2%} over {focus_h}d; after bearish calls "
+            f"{head['mean_ret_when_down']:+.2%} (spread {head['spread_pp']:+.1f} pp)."
         )
 
-    hz = daily_by_period[daily_by_period["period"] == "test"].sort_values("horizon_d")
+    hz = daily_by_period[daily_by_period["period"] == head_period].sort_values("horizon_d")
     if len(hz) > 1:
         lines.append(
-            "- **Horizon decay:** hit rate by horizon on test data: "
+            f"- **Horizon decay:** hit rate by horizon ({'full window' if use_full else 'test data'}): "
             + ", ".join(f"{int(r.horizon_d)}d {_pct(r.hit_rate)}" for r in hz.itertuples())
             + "."
         )
 
-    conv = daily_by_conviction_test[daily_by_conviction_test["horizon_d"] == focus_h].set_index("conviction_bucket")
+    conv = daily_by_conviction[daily_by_conviction["horizon_d"] == focus_h].set_index("conviction_bucket")
     if {"HIGH", "LOW"} <= set(conv.index):
         hi, lo = conv.loc["HIGH", "hit_rate"], conv.loc["LOW", "hit_rate"]
         n_hi, n_lo = int(conv.loc["HIGH", "n_calls"]), int(conv.loc["LOW", "n_calls"])
-        informative = (
-            "conviction looks informative" if hi - lo >= 0.05
-            else "conviction did not clearly separate good calls from bad ones"
-        )
+        if min(n_hi, n_lo) < 15:
+            informative = "too few days per bucket to judge conviction"
+        elif hi - lo >= 0.05:
+            informative = "conviction looks informative"
+        else:
+            informative = "conviction did not clearly separate good calls from bad ones"
         lines.append(
             f"- **Conviction:** high-conviction days hit {_pct(hi)} (n={n_hi}) vs. low-conviction {_pct(lo)} (n={n_lo}), "
             f"so {informative}."
@@ -118,14 +152,18 @@ def write_findings(
     lv = learned_vs_lexicon[learned_vs_lexicon["horizon_d"] == focus_h].set_index("method")
     if {"hand-crafted lexicon", "learned keywords"} <= set(lv.index):
         lines.append(
-            f"- **Hand-crafted vs. learned keywords (test):** {_pct(lv.loc['hand-crafted lexicon', 'hit_rate'])} vs. "
-            f"{_pct(lv.loc['learned keywords', 'hit_rate'])}. Learned keywords were fit on {cfg.analysis_start[:4]} only."
+            f"- **Hand-crafted vs. learned keywords (test):** {_pct(lv.loc['hand-crafted lexicon', 'hit_rate'])} "
+            f"(n={int(lv.loc['hand-crafted lexicon', 'n_calls'])}) vs. "
+            f"{_pct(lv.loc['learned keywords', 'hit_rate'])} (n={int(lv.loc['learned keywords', 'n_calls'])}). Learned keywords were fit on {train_label[4:]} only."
         )
 
     if not term_table.empty:
-        bull = ", ".join(f"`{t}`" for t in term_table.nlargest(5, "z")["term"])
-        bear = ", ".join(f"`{t}`" for t in term_table.nsmallest(5, "z")["term"])
-        lines.append(f"- **Keywords that preceded up-moves:** {bull}. **Down-moves:** {bear}.")
+        bull = ", ".join(f"`{t}`" for t in term_table[term_table["z"] > 0].nlargest(5, "z")["term"]) or "none"
+        bear = ", ".join(f"`{t}`" for t in term_table[term_table["z"] < 0].nsmallest(5, "z")["term"]) or "none"
+        lines.append(
+            f"- **Keywords that preceded up-moves:** {bull}. **Down-moves:** {bear}. "
+            f"(Training period, at least {cfg.min_term_count} posts per term; exploratory.)"
+        )
 
     lines += [
         "",
