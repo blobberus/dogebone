@@ -15,7 +15,7 @@ In two minutes the audience remembers **one number and one picture**. Every form
 - **No more than 15 words of body text per slide.** The script carries the detail; the slide carries the point.
 - No paragraphs, and no more than 3 bullets. Never read a slide aloud.
 - Use plain words: "right 6 times out of 10", not "directional accuracy of 0.60". Define "conviction" once, out loud.
-- Say **"out-of-sample"** or **"on 2022 data we never tuned on"**. It's the strongest credibility signal you have.
+- Say **"out-of-sample"** or **"on Sep–Dec data we never tuned on"**. It's the strongest credibility signal you have.
 
 ## Numbers
 
@@ -77,7 +77,7 @@ In two minutes the audience remembers **one number and one picture**. Every form
 │                                                              │
 │      [X]%         vs.   [Y]%                                 │  ← hero number + baseline, 72pt / 40pt
 │      high-conviction    no-skill                             │
-│      n = [days], 2022 (out-of-sample)                        │  ← 18pt, muted
+│      n = [days], Sep–Dec 2021 (out-of-sample)                │  ← 18pt, muted
 │                                                              │
 │      [ 02_hit_rate_by_conviction.png: 1-day panel ]          │
 └──────────────────────────────────────────────────────────────┘

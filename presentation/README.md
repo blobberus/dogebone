@@ -12,7 +12,7 @@
 ## The goal (say it in one breath)
 
 > **We tested whether the words in posts from the 10 most influential Dogecoin accounts can call DOGE's next daily move, up or down,
-> and how confident each call should be. We used an explainable keyword model trained on 2021 and tested on 2022.**
+> and how confident each call should be. We used an explainable keyword model on all of Elon Musk's 2021 Dogecoin posts, tuned on Jan–Aug and tested on Sep–Dec.**
 
 ## Run-of-show: 5 slides, 2:00 total
 
@@ -21,7 +21,7 @@ Two minutes is about **270 spoken words**. Budget **1:50** and keep 10 seconds o
 | # | Time | Slide title (the takeaway) | On screen | Figure |
 |---|---|---|---|---|
 | 1 | 0:00–0:15 | **Can tweets call Dogecoin's next move?** | Title, team names, one hook stat | none |
-| 2 | 0:15–0:40 | **10 accounts → keywords → a call with a confidence level** | 3-step pipeline graphic: *posts → keyword score → UP/DOWN + Low/Med/High* and "Train 2021 · Test 2022" | none (simple shapes) |
+| 2 | 0:15–0:40 | **Musk's DOGE posts → keywords → a call with a confidence level** | 3-step pipeline graphic: *posts → keyword score → UP/DOWN + Low/Med/High* and "Tuned Jan–Aug · Tested Sep–Dec 2021" | none (simple shapes) |
 | 3 | 0:40–1:15 | **[Headline from `findings.md`, e.g. "High-conviction calls were right [X]% of the time vs. [Y]% by chance"]** | One hero number and its baseline | `02_hit_rate_by_conviction.png` (crop to the 1-day panel) |
 | 4 | 1:15–1:40 | **[One supporting insight, e.g. "Posts lead price for about a day, then the edge fades"]** | One chart | `03_event_study.png` **or** `04_keywords.png` **or** `01_timeline.png` |
 | 5 | 1:40–2:00 | **What it means, and what it can't tell you** | One caveat, one next step | none |
@@ -34,12 +34,11 @@ Use the timeline if the story is "the edge lives in a handful of Musk events".
 > **[Slide 1]** In 2021, one post from Elon Musk teasing his SNL appearance moved Dogecoin about 20% in a day. So we asked:
 > can the *words* in these posts tell us where DOGE goes next?
 >
-> **[Slide 2]** We took every DOGE post from the ten most influential accounts: Musk, the co-creator Billy Markus, Mark Cuban, the
-> Dogecoin Foundation, and others. A keyword model, built for crypto slang (it knows "to the moon" is bullish, "not bullish" isn't,
+> **[Slide 2]** We took every post Elon Musk made about Dogecoin in 2021, 105 of them. A keyword model, built for crypto slang (it knows "to the moon" is bullish, "not bullish" isn't,
 > and "pump and dump" isn't a pump), scores each post. The output is a direction, up or down, plus a conviction level. We tuned
-> everything on 2021 and tested it untouched on 2022, a completely different bear market.
+> on January to August and tested untouched on September to December, after the mania cooled.
 >
-> **[Slide 3]** The result: on 2022 data the model called the next day's direction correctly **[X]%** of the time. A coin flip,
+> **[Slide 3]** The result: on [the full year / Sep–Dec] the model called the next day's direction correctly **[X]%** of the time. A coin flip,
 > adjusted for how often DOGE actually rose, gets **[Y]%**. And conviction matters: high-conviction calls hit **[Z]%**.
 >
 > **[Slide 4]** **[Pick one]** The edge is short-lived: it shows up the next day and is gone by day three. *Or:* The words that
@@ -56,18 +55,19 @@ Posts mostly echoed price instead of leading it."* Keep slides 3–4 and swap th
 
 All of these come from [`data/reference/key_events.csv`](../data/reference/key_events.csv), where each one has a source link.
 
-- **Musk events dominate the big moves.** The SNL "Dogefather" tease (Apr 28 2021, about +20%), the Twitter stake (Apr 4 2022, about +10%),
-  the board accepting his buyout (Apr 25 2022, about +20%), and the Twitter close (Oct 28 2022, DOGE roughly doubled over the following days).
+- **Musk events dominate the big moves.** His Feb 4 2021 post storm (DOGE up more than 50% that day), the SNL "Dogefather" tease
+  (Apr 28 2021, about +20%), and the Tesla-merch-in-DOGE announcement (Dec 14 2021, up to +23% intraday).
 - **Sell the news.** Hype peaked *before* the scheduled events: the Dogeday 4/20 push (about −20% over 24h) and SNL night itself (as much as −30% after the "hustle" joke).
-- **2022's biggest drops weren't post-driven.** LUNA (May), Celsius (Jun) and FTX (Nov) were crypto-wide crashes, which is why the notebook can compare against BTC-adjusted returns.
-- **Text has blind spots.** Many of Musk's DOGE posts were image-only memes, and some major moves followed posts that never said "DOGE" at all (Oct 2022, "the bird is freed").
+- **Not every crash was post-driven.** Tesla suspending Bitcoin payments (May 12 2021) and China's crypto crackdown (May 19 2021) hit all of crypto, which is why the notebook can compare against BTC-adjusted returns.
+- **Text has blind spots.** The archive has *no* text post from Musk mentioning DOGE in January 2021, the month of the WallStreetBets spike; his DOGE posts then were likely images. Only about 1 in 5 of his 2021 DOGE posts contains any sentiment word (see "Coverage" in `findings.md`).
+- **Keywords misread context.** "Super important for Doge fees to *drop*" scores as bearish, though Musk meant cheaper transactions.
 
 ## Q&A prep (likely questions)
 
 | Question | Short answer |
 |---|---|
 | "Isn't this just Elon?" | Check the per-account table in notebook section 7. Musk has the top influence weight, but every account is scored separately. |
-| "Did you overfit?" | Conviction cutoffs and learned keywords were fit on 2021 only, and 2022 was never looked at while tuning. Section 7 also has a robustness check that drops days around 34 key events. |
+| "Did you overfit?" | Conviction cutoffs and learned keywords were fit on Jan–Aug only, and Sep–Dec was never looked at while tuning. Five lexicon terms inspired by specific 2021 events were removed to avoid hindsight. Section 7 also has a robustness check that drops days around 34 key events. |
 | "Why not a big language model?" | Explainability and speed. Every call lists the exact words that drove it. An LLM scorer is a natural next step to compare against. |
 | "Couldn't you trade this?" | No costs, daily data, one coin. The equity curve in section 11 is illustrative only. |
-| "Why is the baseline not 50%?" | DOGE's share of up-days differs a lot between the 2021 mania and the 2022 bear market (notebook section 5 shows both). The bar is the hit rate a no-skill caller would get given those rates and how often we called UP. |
+| "Why is the baseline not 50%?" | DOGE's share of up-days differs a lot between the Jan–May mania and the rest of 2021 (notebook section 5 shows both). The bar is the hit rate a no-skill caller would get given those rates and how often we called UP. |

@@ -2,7 +2,10 @@
 
 **Do posts from Dogecoin's most influential accounts call DOGE's next daily move?**
 This is an explainable keyword/lexicon NLP pipeline. For every post (and every day) it outputs a **direction** (UP / DOWN / no call) and a **conviction** (LOW / MEDIUM / HIGH),
-then scores those calls against DOGE daily closes from **Jan 2021 to Dec 2022**: calibrated on 2021, tested out-of-sample on 2022.
+then scores those calls against DOGE daily closes for **2021**: calibrated on Jan–Aug, tested out-of-sample on Sep–Dec.
+
+**Current data:** every DOGE-related post by **@elonmusk in 2021** (105 posts, from a public archive) and the team's DOGE daily prices.
+Latest results: [`presentation/findings.md`](presentation/findings.md).
 
 📄 **Start with [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md)** for the goal, the hypotheses, the 10 accounts, the method and the 60-minute plan.
 🎤 **Presenting?** See [`presentation/`](presentation/).
@@ -14,10 +17,17 @@ pip install -r requirements.txt
 jupyter lab notebooks/01_doge_post_sentiment_signal.ipynb   # Run All
 ```
 
-The notebook runs immediately on **synthetic** sample data (`data/sample/`), which carries a planted signal so you can see the pipeline work.
-Results are bannered and charts are watermarked "SYNTHETIC DATA" until real data is present.
+The notebook runs on the **real data already in `data/raw/`**. To rebuild those files from source:
 
-**To use real data:**
+```bash
+python scripts/fetch_musk_tweets.py --year 2021   # public archive (~42 MB) -> data/raw/tweets/elonmusk_2021.csv
+python scripts/prepare_doge_prices.py             # data/raw/prices/DogePrice.xlsx -> data/raw/prices/doge_daily.csv
+```
+
+If `data/raw/` is empty, the notebook falls back to **synthetic** sample data (`data/sample/`, with a planted signal); results are then
+bannered and charts watermarked "SYNTHETIC DATA".
+
+**To add more accounts or other data:**
 
 1. Put a DOGE daily price CSV (file name containing `doge`) in `data/raw/prices/`. Optionally add a `btc` file for market-adjusted returns.
 2. Put the tweet export(s) in `data/raw/tweets/`. CSV, JSON and JSONL all work; most scraper column names are mapped automatically. See [`data/README.md`](data/README.md).
@@ -52,7 +62,7 @@ dogebone/
 │   ├── plots.py               slide-ready charts
 │   └── report.py              drafts presentation/findings.md from results
 ├── presentation/              2-minute talk: outline, script, formatting guide, findings, figures
-└── scripts/make_sample_data.py
+└── scripts/                   fetch_musk_tweets.py, prepare_doge_prices.py, xlsx_to_csv.py, make_sample_data.py
 ```
 
 ## How a call is made
@@ -77,4 +87,4 @@ Run the rule checks with `python tests/test_pipeline.py` (or `pytest tests`).
 
 - **Lexicon:** edit `lexicons/sentiment_lexicon.csv`. Section 4 of the notebook shows the most bullish and bearish posts and the terms that matched.
 - **Knobs:** set them in the notebook's config cell: `horizons`, `anchor_mode`, `neutral_threshold`, `train_end` (see `src/dogebone/config.py`).
-- **The rule:** tune only on **2021** posts. Looking at 2022 while tuning leaks the test set, and the out-of-sample number stops meaning anything.
+- **The rule:** tune only on **Jan–Aug 2021** posts. Looking at Sep–Dec while tuning leaks the test set, and the out-of-sample number stops meaning anything.

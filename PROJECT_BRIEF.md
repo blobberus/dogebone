@@ -4,8 +4,9 @@
 
 | | |
 |---|---|
-| **Window** | 2021-01-01 to 2022-12-31 (daily UTC closes) |
-| **Inputs** | Every DOGE-related post from the 10 accounts below, plus the DOGE (and optionally BTC) daily price series |
+| **Window** | 2021-01-01 to 2021-12-31 (daily UTC closes): calibrate on Jan–Aug, test out-of-sample on Sep–Dec |
+| **Inputs** | Every DOGE-related post from the accounts below, plus the DOGE (and optionally BTC) daily price series |
+| **Current data** | **@elonmusk only: 105 DOGE-related posts in 2021** (public archive, `scripts/fetch_musk_tweets.py`) and the team's DOGE prices (`scripts/prepare_doge_prices.py`). The other nine accounts are the target list for the next data pull. |
 | **Output per post / per day** | **Direction** (UP / DOWN / no call) and **conviction** (LOW / MEDIUM / HIGH), with the matched keywords that explain the call |
 | **Horizons** | 1, 3 and 7 days after the post (configurable) |
 | **Not in scope** | Price targets, magnitude forecasts, intraday trading, image/video understanding |
@@ -16,14 +17,15 @@
 ## 1. Why this question and this window
 
 DOGE is the clearest case of a market moved by social media. It has no cash flows, its supply is uncapped, and its 2021 run was openly
-driven by posts and memes. The 2021–2022 window gives a natural experiment:
+driven by posts and memes. 2021 splits into two very different markets:
 
-- **2021, the mania (calibration set).** The WallStreetBets spillover (Jan), Musk's "people's crypto" posts (Feb), Snoop Dogg and Gene Simmons (Feb),
-  the Mavericks accepting DOGE (Mar), the SNL "Dogefather" tease and the "it's a hustle" crash (Apr–May), and the Coinbase listing (Jun).
-- **2022, the bear market (out-of-sample test).** Tesla merch payments (Jan), Fed hikes (Mar), the Twitter deal (Apr–Oct), the LUNA, Celsius and 3AC
-  contagion (May–Jun), and FTX (Nov).
+- **Jan–Aug, the mania and its unwind (calibration set).** The WallStreetBets spillover (Jan), Musk's "people's crypto" posts (Feb), Snoop Dogg and
+  Gene Simmons (Feb), the Mavericks accepting DOGE (Mar), the SNL "Dogefather" tease and the "it's a hustle" crash (Apr–May), the Coinbase listing (Jun),
+  and the Dogecoin Foundation relaunch (Aug).
+- **Sep–Dec, the cooled-off market (out-of-sample test).** The Core 1.14.5 fee cut and Binance's DOGE withdrawal halt (Nov), Bitcoin's cycle top (Nov),
+  and Musk's Tesla-merch-in-DOGE announcement (Dec 14).
 
-Tuning on 2021 and testing on 2022 is a deliberate **regime-shift test**: a signal that only works in a bubble isn't a signal.
+Tuning on Jan–Aug and testing on Sep–Dec checks whether anything found during the mania survives a calmer market. A signal that only works in a bubble isn't a signal.
 `data/reference/key_events.csv` lists 34 dated, sourced events for annotation and sanity checks.
 
 ## 2. Hypotheses
@@ -31,12 +33,14 @@ Tuning on 2021 and testing on 2022 is a deliberate **regime-shift test**: a sign
 | # | Hypothesis | How the notebook tests it |
 |---|---|---|
 | H1 | Lexicon sentiment predicts next-*h*-day direction better than chance | Daily-call hit rate vs. the **no-skill rate** (the hit rate expected if calls were independent of outcomes), one-sided binomial test |
-| H2 | Conviction is calibrated: HIGH-conviction calls hit more often than LOW | Hit rate by conviction tercile (cutoffs fit on 2021, applied to 2022) |
+| H2 | Conviction is calibrated: HIGH-conviction calls hit more often than LOW | Hit rate by conviction tercile (cutoffs fit on Jan–Aug, applied to Sep–Dec) |
 | H3 | Posts **lead** price rather than echo it | Sentiment hit rate vs. a momentum baseline; event-study paths before and after day 0 |
 | H4 | The effect is short-lived | Hit-rate decay across the 1, 3 and 7-day horizons |
 | H5 | Who matters: influence is concentrated | Per-account hit rate and edge; the Musk vs. everyone-else contrast |
 
-## 3. The 10 accounts
+## 3. The 10 accounts (target list)
+
+> **Current data covers @elonmusk only** (see the header table). The other nine below are the next accounts to pull.
 
 These were verified for 2021–2022 activity through indexed profiles, dated status URLs, and press coverage. Machine-readable version: [`config/accounts.csv`](config/accounts.csv).
 `influence_weight` is a judgment call about how much each account's posts plausibly move price. It scales **conviction**, never direction.
@@ -92,12 +96,12 @@ prices ──► daily UTC closes ──► anchor each post to the nearest clos
   - Negation flips the weight (*not bullish* → bearish).
   - Hedges (*maybe*, *nfa*, a trailing `?`) lower conviction.
   - Every call lists its matched terms, so a result can be explained in one sentence.
-- **Data-driven keywords (`evaluate.term_stats`).** Smoothed log-odds of an up-move for every word, bigram, and emoji in **2021** posts,
-  turned into a learned lexicon and tested on 2022 against the hand-crafted one.
+- **Data-driven keywords (`evaluate.term_stats`).** Smoothed log-odds of an up-move for every word, bigram, and emoji in **Jan–Aug** posts,
+  turned into a learned lexicon and tested on Sep–Dec against the hand-crafted one.
 - **No look-ahead (`src/dogebone/market.py`).** Each post is measured from the daily close nearest in time to it, so at most 12h of pre-post movement leaks in.
-  Conviction cutoffs and learned keywords are fit on 2021 only.
+  Conviction cutoffs and learned keywords are fit on Jan–Aug only. Five lexicon terms inspired by specific 2021 events were removed to avoid hindsight.
 - **Honest baselines (`src/dogebone/evaluate.py`).**
-  - The no-skill hit rate (not 50%: 2021 and 2022 have very different up-day rates).
+  - The no-skill hit rate (not 50%: up-day rates differ between the mania and the rest of the year).
   - A momentum rule (do posts just echo price?).
   - An optional generic-VADER comparison.
   - BTC-adjusted returns when BTC prices are provided.
@@ -126,12 +130,12 @@ prices ──► daily UTC closes ──► anchor each post to the nearest clos
 | Time | Who | What |
 |---|---|---|
 | 0:00–0:10 | Data | Drop price and tweet files into `data/raw/`. Run section 2 of the notebook and fix any column-name or coverage warnings. |
-| 0:10–0:30 | NLP | Run the notebook. Read the most bullish and most bearish posts (section 4). Add missing slang to `lexicons/sentiment_lexicon.csv` **using 2021 posts only**, then re-run. |
+| 0:10–0:30 | NLP | Run the notebook. Read the most bullish and most bearish posts (section 4). Add missing slang to `lexicons/sentiment_lexicon.csv` **using Jan–Aug posts only**, then re-run. |
 | 0:10–0:30 | Analyst | Check the evaluation (section 7) against the event timeline: is the edge just a few big event days? Try `anchor_mode="same_close"` as a robustness check. |
 | 0:30–0:45 | All | Freeze the lexicon. Final run. Read `presentation/findings.md` and pick the headline and one supporting insight. |
 | 0:45–0:60 | Presenter | Build 4–5 slides from `presentation/figures/` following `presentation/formatting_guide.md`. Rehearse to 1:50. |
 
-> **Don't tune the lexicon on 2022 posts.** That leaks the test set into the model, and the out-of-sample number stops meaning anything.
+> **Don't tune the lexicon on Sep–Dec posts.** That leaks the test set into the model, and the out-of-sample number stops meaning anything.
 
 ## 7. Risks and caveats
 

@@ -10,6 +10,14 @@ data/
 └── processed/       <- notebook outputs (scored tweets, metrics); git-ignored
 ```
 
+## Current raw files
+
+| File | Source | Built by |
+|---|---|---|
+| `raw/prices/DogePrice.xlsx` | Uploaded by the team: day index 1–730 and the DOGE **opening** price, 2021-01-01 to 2022-12-31 | (source file, untouched) |
+| `raw/prices/doge_daily.csv` | Derived: dates from the day index (day 1 = 2021-01-01, checked against known moves), `close[D] = open[D+1]` | `scripts/prepare_doge_prices.py` |
+| `raw/tweets/elonmusk_2021.csv` | Hugging Face [`fdaudens/musk-tweets`](https://huggingface.co/datasets/fdaudens/musk-tweets) (no license stated): @elonmusk's own 2021 posts that mention DOGE (`relevance=text`) or reply to a DOGE account (`relevance=doge_account`). Timestamps come from the tweet IDs (exact UTC). | `scripts/fetch_musk_tweets.py --year 2021` |
+
 The notebook uses `data/raw/` when it finds both price and tweet files, and otherwise falls back to
 `data/sample/` with a loud warning. **Never present results computed on `data/sample/`.**
 
@@ -20,7 +28,7 @@ The notebook uses `data/raw/` when it finds both price and tweet files, and othe
 | File name | Must contain `doge` (e.g. `doge_daily.csv`). An optional `btc*.csv` enables market-adjusted returns. |
 | Format | CSV (comma or semicolon; delimiter is auto-detected) |
 | Timestamp convention | If the file stamps a 00:00 UTC snapshot (CoinGecko `snapped_at`), set `price_is_start_of_day_snapshot=True` in the notebook config. |
-| Frequency | Daily, **UTC** candles, 2021-01-01 to 2022-12-31. Add ~10 days of padding on both ends so 7-day forward returns exist at the edges. |
+| Frequency | Daily, **UTC** candles covering 2021-01-01 to 2021-12-31. Add ~10 days of padding on both ends so 7-day forward returns exist at the edges. |
 | Required columns | a date column and a close column |
 | Optional columns | `open`, `high`, `low`, `volume` |
 
@@ -38,7 +46,7 @@ Investing.com style values (`"0.0891"`, `"1.2B"` volume, `"-3.1%"`) are cleaned 
 | Requirement | Detail |
 |---|---|
 | Format | `.csv`, `.json` (list of objects), or `.jsonl` |
-| Scope | DOGE-related posts from the accounts in [`config/accounts.csv`](../config/accounts.csv), 2021-01-01 to 2022-12-31 |
+| Scope | DOGE-related posts from the accounts in [`config/accounts.csv`](../config/accounts.csv), 2021-01-01 to 2021-12-31 |
 | Required fields | timestamp, text, account handle (*or* one file per account named `<handle>.csv`) |
 | Timestamps | **Full timestamps with time of day** (UTC preferred). Date-only data still works but loses the intraday alignment logic. Naive timestamps are treated as UTC. |
 
