@@ -44,6 +44,7 @@ class LexiconScorer:
         alpha_caps = [caps for tok, caps in toks if any(ch.isalpha() for ch in tok)]
         text_is_shouting = len(alpha_caps) >= 3 and all(alpha_caps)
         hits, raw, i = [], 0.0, 0
+        last_end = 0  # modifiers never reach back past the previous sentiment term
         while i < len(words):
             match_len, weight = 0, 0.0
             for n in range(min(self.max_ngram, len(words) - i), 0, -1):
@@ -56,10 +57,10 @@ class LexiconScorer:
                 continue
             term = " ".join(words[i : i + match_len])
             factor = 1.0
-            before = words[max(0, i - cfg.negation_window) : i]
+            before = words[max(last_end, i - cfg.negation_window) : i]
             if any(w in self.negators for w in before):
                 factor *= -0.74
-            for w in words[max(0, i - cfg.intensifier_window) : i]:
+            for w in words[max(last_end, i - cfg.intensifier_window) : i]:
                 if w in self.intensifiers:
                     factor *= self.intensifiers[w]
             if all(c for _, c in toks[i : i + match_len]) and not text_is_shouting:
@@ -68,6 +69,7 @@ class LexiconScorer:
             hits.append((term, contrib))
             raw += contrib
             i += match_len
+            last_end = i
 
         norm = normalize(text)
         if raw:
