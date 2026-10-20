@@ -84,6 +84,47 @@ def test_logistic_regression_reaches_penalized_optimum():
     assert m.coef_[0] > 1.0 and abs(m.coef_[1]) < 0.3
 
 
+def test_walk_forward_is_purged_and_predicts_each_day_once():
+    rng = np.random.default_rng(1)
+    dates = pd.date_range("2021-01-01", "2021-06-30", freq="2D")
+    ev = pd.DataFrame({"anchor_date": dates, "a": rng.normal(size=len(dates)), "mom_3d": 0.0})
+    ev["y_3d"] = (rng.random(len(dates)) < 0.5).astype(float)
+    ev["fwd_ret_3d"] = ev["y_3d"] - 0.5
+    preds = M.walk_forward(ev, 3, ["a"], first_test="2021-03-01")
+    assert preds["anchor_date"].is_unique and preds["anchor_date"].min() >= pd.Timestamp("2021-03-01")
+    for fold, g in preds.groupby("fold"):
+        start = pd.Timestamp(f"{fold}-01")
+        assert (g["anchor_date"] >= start).all() and (g["anchor_date"] < start + pd.offsets.MonthBegin(1)).all()
+        assert g["n_train"].iloc[0] == int((ev["anchor_date"] + pd.Timedelta(days=3) < start).sum())
+
+
+def test_saved_model_round_trips_and_predictor_guards_dates():
+    import tempfile
+
+    rng = np.random.default_rng(2)
+    ev = pd.DataFrame({f: rng.normal(size=60) for f in M.ALL_FEATURES})
+    ev["anchor_date"] = pd.date_range("2021-02-01", periods=60)
+    ev["y_1d"] = (rng.random(60) < 0.5).astype(float)
+    m = M.DirectionModel(1).fit(ev)
+    with tempfile.TemporaryDirectory() as d:
+        m2 = M.DirectionModel.load(m.save(Path(d) / "m.json"))
+    assert np.allclose(m.predict_proba(ev), m2.predict_proba(ev))
+
+    if (CFG.raw_tweets_dir.exists() and any(CFG.raw_tweets_dir.iterdir())
+            and any((CFG.root / "models").glob(M.MODEL_GLOB))):
+        pred = M.Predictor.from_repo()
+        out = pred.predict("Dogecoin is the people's crypto", posted_at="2021-02-04T08:00:00Z")
+        assert set(out["horizon_d"]) == set(pred.models) and out["p_up"].between(0, 1).all()
+        assert (out["anchor_date"] == pd.Timestamp("2021-02-03")).all()  # before 12:00 UTC -> previous close
+        last_close = pred.prep.prices.index.max()
+        try:
+            pred.predict("Doge", posted_at=last_close + pd.Timedelta(days=5))
+        except ValueError as e:
+            assert "No DOGE close" in str(e)
+        else:
+            raise AssertionError("expected a ValueError for a post after the last price")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
