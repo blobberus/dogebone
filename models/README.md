@@ -40,9 +40,14 @@ pred = Predictor.from_repo()          # loads models/*.json, the DOGE prices and
 pred.predict("Tesla will make some merch buyable with Doge & see how it goes", posted_at="2021-12-14T10:00:00Z")
 ```
 
-| anchor_date | horizon_d | p_up | direction | conviction | lexicon_sentiment | matched_terms | top_reasons | actual | actual_return |
-|---|---|---|---|---|---|---|---|---|---|
-| 2021-12-13 | 1 | … | UP / DOWN | LOW / MEDIUM / HIGH | … | … | "DOGE return, last 7 days = −4.1% (pushes DOWN); …" | UP / DOWN / None | … |
+| anchor_date | horizon_d | p_up | direction | conviction | lexicon_sentiment | actual | actual_return |
+|---|---|---|---|---|---|---|---|
+| 2021-12-13 | 1 | 0.642 | UP | MEDIUM | 0.0 | UP | +21.4% |
+| 2021-12-13 | 3 | 0.585 | UP | LOW | 0.0 | UP | +10.0% |
+| 2021-12-13 | 7 | 0.503 | UP | LOW | 0.0 | UP | +6.2% |
+
+`top_reasons` (1d): *Has an original post (not only replies) = yes (pushes UP); Share of posts saying 'Doge' outright = 100% (pushes UP);
+Number of DOGE posts that day = 1 (pushes UP)*. The post went out at 10:34 UTC, before noon, so it is measured from the Dec 13 close.
 
 > The 2021 examples above are **in-sample** for the shipped models, which were fit on all of 2021. For an honest demo,
 > section 9 of the notebook scores Musk's last 2021 posts with the Jan–Aug model, which never saw them.
@@ -75,12 +80,18 @@ It returns one row per **(post day, horizon)**:
 | `top_reasons` | The three features with the largest push on the log-odds, in plain English |
 | `actual`, `actual_return` | What DOGE did, if the repo's prices already cover the horizon; otherwise `None` / NaN |
 
-**Requirements and errors**
+**Requirements, errors and warnings**
 
-- The prices in `data/raw/prices/` must include the **anchor close**. The market features need it and the 30 days before it.
-  Otherwise `predict` raises `ValueError: No DOGE close for <date> ...`. To score a post from today, add up-to-date daily prices first.
-- "Days since the previous DOGE post" is computed from the posts in `data/raw/tweets/` dated before the new post. Posts after the
-  newest file entry use the gap from the last known post (capped at 30 days).
+| Situation | What happens |
+|---|---|
+| Anchor close after the last price in `data/raw/prices/` | `ValueError: No DOGE close for <date> (prices end ...)`. To score a post from today, add up-to-date daily prices first. |
+| Anchor before the first price, or fewer than ~10 closes before it | `ValueError`. The market features would be missing, and the model never fills them in silently. |
+| `posted_at` is a bare date such as `"2021-12-14"` | Warning. It anchors to that day's close (`date_only_anchor_mode`), not to the previous close as 00:00 UTC would. Pass a full UTC time for the exact anchor. |
+| The post neither mentions DOGE nor tags a DOGE account | Warning. The model was trained on DOGE posts only, so the call is out of scope. |
+| No `message_type` column | A post starting with "@" counts as a reply. Pass `message_type` (`update` / `reply`) to match the training export exactly; in 2021, 4 of 82 replies didn't start with "@". |
+
+"Days since the previous DOGE post" uses the posts in `data/raw/tweets/` dated before each new post day, plus the other days in the
+same batch. For dates after the newest post on file (2021-12-22), it can't see posts it was never given and caps the gap at 30 days.
 
 ### `Predictor.features(posts, posted_at=None) -> pandas.DataFrame`
 
@@ -151,23 +162,51 @@ Baselines are scored on the same days:
 
 ## Results
 
-_Filled in from the latest notebook run; see [`model_findings.md`](../presentation/model_findings.md) for every table._
+From the latest run of `notebooks/02_direction_model.ipynb`, on 69 Musk DOGE post days in 2021. Every table is in [`model_findings.md`](../presentation/model_findings.md).
+
+| Test | Horizon | n | Model | No-skill | p | Always majority | Momentum | AUC | Brier skill |
+|---|---|---|---|---|---|---|---|---|---|
+| **Walk-forward (Apr–Dec)** | **1d (pre-registered)** | 52 | **50%** | 49% | 0.525 | 48% | 40% | 0.52 | −0.05 |
+| Walk-forward | 3d | 52 | 62% | 49% | 0.052 | 48% | 56% | 0.59 | +0.07 |
+| Walk-forward | 7d | 51 | 49% | 50% | 0.620 | 55% | 59% | 0.44 | −0.10 |
+| **Held-out Sep–Dec** | **1d (pre-registered)** | 20 | **20%** | 40% | 0.982 | 35% | 30% | 0.36 | −0.35 |
+| Held-out Sep–Dec | 3d | 20 | 55% | 52% | 0.483 | 55% | 50% | 0.60 | +0.02 |
+| Held-out Sep–Dec | 7d | 19 | 53% | 57% | 0.735 | 58% | 68% | 0.53 | −0.05 |
+
+**Reading it:**
+
+- **1 day (the pre-registered horizon): no skill.** The walk-forward result is at chance.
+  The held-out months are worse than chance: the Jan–Aug model called DOWN on 17 of 20 autumn post days, but DOGE rose the next day after 13 of them.
+- **3 days: a lead, not a finding.** 62% vs. 49%, and both permutation tests give a hit-rate p of 0.03 (outcomes shuffled, and only Musk's text features shuffled).
+  But it's one of three horizons tested, so it misses the Bonferroni bar of 0.017, and on the held-out months it shrinks to 55% vs. 52%.
+- **Market features flip between regimes.** Market-only models rank worse than chance (AUC 0.31–0.36). What predicted "up" during the spring mania pointed the wrong way in the autumn.
+- **Conviction isn't informative yet.** On the 1d walk-forward, HIGH-conviction calls hit 45% (n = 11) and LOW 48% (n = 23).
+
+Coefficients of the shipped 1d model (log-odds per SD, fit on all of 2021):
+
+- 7-day momentum +0.32;
+- number of posts −0.25;
+- used any sentiment word −0.24;
+- saying "Doge" outright +0.21;
+- original post +0.12.
+
+See `presentation/figures/08_model_coefficients.png`.
 
 ## JSON format
 
 ```json
 {
   "horizon_days": 1,
-  "features": ["lex_score", "..."],
-  "intercept": 0.05,
-  "coef_per_sd": [0.11, "..."],
+  "features": ["lex_score", "lex_any", "..."],
+  "intercept": 0.157,
+  "coef_per_sd": [0.108, "..."],
   "train_mean": [0.075, "..."],
   "train_sd": [0.211, "..."],
-  "base_rate_up": 0.51,
+  "base_rate_up": 0.536,
   "n_train_days": 69,
   "l2": 5.0,
   "conviction_edges": [0.2, 0.4],
-  "meta": {"walk_forward_test": {"hit_rate": "...", "auc": "..."}, "heldout_test": {"...": "..."}}
+  "meta": {"walk_forward_test": {"hit_rate": 0.5, "auc": 0.516, "...": "..."}, "heldout_test": {"...": "..."}, "...": "..."}
 }
 ```
 
@@ -178,6 +217,7 @@ Scoring without this repo: `z = (x − train_mean) / train_sd` (missing → 0), 
 - **Small sample.** One account and one year give 69 post days, about 50 of them out-of-sample per horizon.
 - **Regime change.** Feb–May 2021 was a mania and Sep–Dec a slow bleed. Market features that pointed up in spring pointed down in autumn.
 - **Extreme inputs.** The late-January 2021 run-up gives `mom_7d` values about 6 SD from the mean, so early-February post days get near-certain probabilities.
+  That's the 94% in the CLI example above. Clipping standardized features at ±3 would be the next variant to pre-register.
 - **Invisible posts.** Image-only memes, and posts that move DOGE without saying "Doge", are invisible.
 - **Daily resolution.** Daily closes blur a minutes-scale reaction.
 
