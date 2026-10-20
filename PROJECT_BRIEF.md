@@ -6,8 +6,9 @@
 |---|---|
 | **Window** | 2021-01-01 to 2021-12-31 (daily UTC closes): calibrate on Jan–Aug, test out-of-sample on Sep–Dec |
 | **Inputs** | Every DOGE-related post from the accounts below, plus the DOGE (and optionally BTC) daily price series |
-| **Current data** | **@elonmusk only: 105 DOGE-related posts in 2021** (public archive, `scripts/fetch_musk_tweets.py`) and the team's DOGE prices (`scripts/prepare_doge_prices.py`). The other nine accounts are the target list for the next data pull. |
-| **Output per post / per day** | **Direction** (UP / DOWN / no call) and **conviction** (LOW / MEDIUM / HIGH), with the matched keywords that explain the call |
+| **Scope delivered** | **@elonmusk only: 105 DOGE-related posts on 69 post days in 2021** (public archive, `scripts/fetch_musk_tweets.py`) and the team's DOGE prices (`scripts/prepare_doge_prices.py`). The other nine accounts are the target list for the next data pull. |
+| **Status** | ✅ **Complete for Musk-only.** Both analyses ran on real data; results are in [§ 2b](#2b-results-musk-only-2021). |
+| **Output per post / per day** | **Direction** (UP / DOWN / no call) and **conviction** (LOW / MEDIUM / HIGH), with the matched keywords that explain the call. A **trained model** ([`models/README.md`](models/README.md)) adds P(up) and the top three reasons. |
 | **Horizons** | 1, 3 and 7 days after the post (configurable) |
 | **Not in scope** | Price targets, magnitude forecasts, intraday trading, image/video understanding |
 | **Format** | 1-hour hackathon powered by Claude Enterprise; 2-minute final presentation |
@@ -37,6 +38,28 @@ Tuning on Jan–Aug and testing on Sep–Dec checks whether anything found durin
 | H3 | Posts **lead** price rather than echo it | Sentiment hit rate vs. a momentum baseline; event-study paths before and after day 0 |
 | H4 | The effect is short-lived | Hit-rate decay across the 1, 3 and 7-day horizons |
 | H5 | Who matters: influence is concentrated | Per-account hit rate and edge; the Musk vs. everyone-else contrast |
+
+## 2b. Results (Musk only, 2021)
+
+There are two predictors:
+
+- **Lexicon calls** ([`notebooks/01`](notebooks/01_doge_post_sentiment_signal.ipynb), [`findings.md`](presentation/findings.md)) only call days whose posts use a sentiment word.
+- **The trained model** ([`notebooks/02`](notebooks/02_direction_model.ipynb), [`model_findings.md`](presentation/model_findings.md)) is a logistic regression on text and market features.
+  It was tested on held-out Sep–Dec and with monthly walk-forward refits (Apr–Dec). Its settings were fixed before testing.
+
+| # | Verdict | Evidence |
+|---|---|---|
+| H1 | ❌ **Not supported** | **Lexicon**, next day, full year: 53% vs. 48% no-skill (n = 17 days, p = 0.437). **Model**, next day (pre-registered): 50% vs. 49% walk-forward (n = 52, p = 0.525) and 20% vs. 40% on held-out Sep–Dec (n = 20). |
+| H2 | ❌ **Not supported** | **Lexicon**: HIGH 60% (n = 5) vs. LOW 33% (n = 6), too few to judge. **Model** (1d walk-forward): HIGH 45% (n = 11) vs. LOW 48% (n = 23). |
+| H3 | ⚪ **Inconclusive** | The calls beat a momentum rule (lexicon 53% vs. 41%; model 1d 50% vs. 40%), but neither beats chance, so there's no lead to separate from an echo. |
+| H4 | ⚪ **No decay pattern** | **Lexicon** 1/3/7d: 53% / 53% / 56%. **Model** walk-forward: 50% / 62% / 49%. The 3-day result (p = 0.052; permutation p = 0.03, also when only the text features are shuffled) is a lead to re-test. It isn't a finding: it misses the 0.017 Bonferroni bar for three horizons, and on held-out Sep–Dec it's 55% vs. 52%. |
+| H5 | ⚪ **Untestable with one account** | Within Musk, regardless of wording, DOGE rose the next day after 54% of post days vs. 48% of all 2021 days (n = 69, p = 0.192). Posts saying "Doge" outright push the model toward UP (+0.21 log-odds per SD), and replies that only tag a DOGE account push it toward DOWN. |
+
+**What we learned:**
+
+1. **Musk's DOGE posts are mostly wordless.** Only 19 of 105 posts (18%) contain a sentiment term, so a keyword lexicon can make a call on just 17 of the 69 post days.
+2. **2021 changed regime mid-year.** Market-only features rank worse than chance out-of-sample (AUC 0.31–0.36): what predicted "up" in the spring mania pointed the wrong way in the autumn.
+3. **One account and one year is too little data.** With about 50 out-of-sample days, a 10-point edge is within noise. The next step is the other nine accounts below, plus 2022 (the prices already cover it).
 
 ## 3. The 10 accounts (target list)
 
@@ -98,6 +121,12 @@ prices ──► daily UTC closes ──► anchor each post to the nearest clos
   - Every call lists its matched terms, so a result can be explained in one sentence.
 - **Data-driven keywords (`evaluate.term_stats`).** Smoothed log-odds of an up-move for every word, bigram, and emoji in **Jan–Aug** posts,
   turned into a learned lexicon and tested on Sep–Dec against the hand-crafted one.
+- **Trained model (`src/dogebone/model.py`).** L2 logistic regression on one row per post day.
+  - Text features: lexicon score, any sentiment word, post count, "Doge" outright vs. tagging a DOGE account, original vs. reply, days since the last DOGE post.
+  - Market features: 1d/7d momentum, 7d volatility, distance below the 30-day high.
+  - Output: P(up) at 1, 3 and 7 days → call + conviction + top reasons.
+  - Training rows are purged so outcome windows never cross into the test period. Features, penalty and focus horizon were fixed before testing.
+  - An independent audit found no look-ahead leakage.
 - **No look-ahead (`src/dogebone/market.py`).** Each post is measured from the daily close nearest in time to it, so at most 12h of pre-post movement leaks in.
   Conviction cutoffs and learned keywords are fit on Jan–Aug only. Five lexicon terms inspired by specific 2021 events were removed to avoid hindsight.
 - **Honest baselines (`src/dogebone/evaluate.py`).**
@@ -112,7 +141,9 @@ prices ──► daily UTC closes ──► anchor each post to the nearest clos
 
 | Deliverable | Where |
 |---|---|
-| Runnable analysis | [`notebooks/01_doge_post_sentiment_signal.ipynb`](notebooks/01_doge_post_sentiment_signal.ipynb) |
+| Runnable analysis | [`notebooks/01_doge_post_sentiment_signal.ipynb`](notebooks/01_doge_post_sentiment_signal.ipynb) (lexicon calls) |
+| Trained up/down model, tested out-of-sample | [`notebooks/02_direction_model.ipynb`](notebooks/02_direction_model.ipynb) → [`models/*.json`](models/), [`presentation/model_findings.md`](presentation/model_findings.md) |
+| Prediction function and its README | `dogebone.model.Predictor`, [`scripts/predict.py`](scripts/predict.py), [`models/README.md`](models/README.md) |
 | Account list and weights | [`config/accounts.csv`](config/accounts.csv) |
 | Lexicons (tune without code changes) | [`lexicons/`](lexicons/) |
 | Event timeline | [`data/reference/key_events.csv`](data/reference/key_events.csv) |
@@ -121,9 +152,11 @@ prices ──► daily UTC closes ──► anchor each post to the nearest clos
 
 **Definition of done:**
 
-- The notebook runs top to bottom on real data with **no "SYNTHETIC" banner**.
-- `presentation/findings.md` is regenerated from that run.
-- The 2-minute talk states one headline number, one supporting insight, and one caveat.
+- [x] Both notebooks run top to bottom on real data with **no "SYNTHETIC" banner**.
+- [x] `presentation/findings.md` and `presentation/model_findings.md` are regenerated from those runs.
+- [x] The model is saved (`models/*.json`), documented ([`models/README.md`](models/README.md)), and tested on held-out data.
+- [x] Rule and leakage checks pass: `python tests/test_pipeline.py`.
+- [ ] The 2-minute talk states one headline number, one supporting insight, and one caveat (see [`presentation/`](presentation/)).
 
 ## 6. Hackathon run-of-show (60 minutes)
 
