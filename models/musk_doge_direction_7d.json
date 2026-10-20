@@ -72,7 +72,7 @@
     0.4
   ],
   "meta": {
-    "saved_utc": "2026-10-20T08:11:38Z",
+    "saved_utc": "2026-10-20T08:28:14Z",
     "data_mode": "raw",
     "account": "elonmusk",
     "analysis_window": [
@@ -122,6 +122,6 @@
       "2021-09-01",
       "2021-12-31"
     ],
-    "walk_forward_first_month": "2021-03-01"
+    "walk_forward_months": "Apr\u2013Dec 2021"
   }
 }

@@ -1,12 +1,13 @@
 # Model findings (auto-drafted by notebooks/02_direction_model.ipynb)
 
-_Generated 2026-10-20 08:11 UTC from 105 @elonmusk DOGE posts on 69 post days, 2021-01-01 to 2021-12-31. Model: L2 logistic regression (penalty 5, fixed in advance) on post-day text and market features. Focus horizon: 1 day(s), chosen before testing._
+_Generated 2026-10-20 08:28 UTC from 105 @elonmusk DOGE posts on 69 post days, 2021-01-01 to 2021-12-31. Model: L2 logistic regression (penalty 5, fixed in advance) on post-day text and market features. Focus horizon: 1 day(s), chosen before testing._
 
 ## Headline
 
-- Walk-forward (Mar–Dec 2021, refit monthly on earlier months only): the model called the next-1-day direction right **50%** of the time vs. **49%** no-skill (+0.5 pp, p = 0.525, n = 52 post days; AUC 0.52, Brier skill -0.05): **not** distinguishable from chance.
+- Walk-forward (Apr–Dec 2021, refit monthly on earlier months only): the model called the next-1-day direction right **50%** of the time vs. **49%** no-skill (+0.5 pp, p = 0.525, n = 52 post days; AUC 0.52, Brier skill -0.05): **not** distinguishable from chance.
 - Held-out Sep–Dec 2021 (trained on Jan–Aug only): the model called the next-1-day direction right **20%** of the time vs. **40%** no-skill (-19.5 pp, p = 0.982, n = 20 post days; AUC 0.36, Brier skill -0.35): **not** distinguishable from chance.
 - Against simple rules (walk-forward, 1d): the model beat always calling the training majority (48%) and beat momentum (40%).
+- Walk-forward months skipped for too little history: 2021-03 (9 earlier post days with outcomes, need 15).
 
 ## Every horizon (text + market features)
 
