@@ -212,12 +212,13 @@ def write_model_findings(
     n_posts: int,
     figures: list[str],
     l2: float,
-    first_test: str,
+    wf_window: str,
+    skipped_months: list | None = None,
 ) -> str:
     """Draft presentation/model_findings.md from notebooks/02_direction_model.ipynb results."""
     full = "text + market"
     test_start = pd.Timestamp(cfg.train_end) + pd.Timedelta(days=1)
-    wf_label = f"Walk-forward ({pd.Timestamp(first_test):%b}–{pd.Timestamp(cfg.analysis_end):%b %Y}, refit monthly on earlier months only)"
+    wf_label = f"Walk-forward ({wf_window}, refit monthly on earlier months only)"
     ho_label = f"Held-out {test_start:%b}–{pd.Timestamp(cfg.analysis_end):%b %Y} (trained on {pd.Timestamp(cfg.analysis_start):%b}–{pd.Timestamp(cfg.train_end):%b} only)"
     wf_head = _row(walk_forward, features=full, horizon_d=focus_h)
     ho_head = _row(holdout, features=full, horizon_d=focus_h)
@@ -246,6 +247,8 @@ def write_model_findings(
             f"({_pct(wf_head['majority_hit_rate'])}) and {beat_mom} momentum ({_pct(wf_head['momentum_hit_rate'])})."
         )
 
+    if skipped_months:
+        lines.append(f"- Walk-forward months skipped for too little history: {', '.join(skipped_months)}.")
     lines += ["", "## Every horizon (text + market features)", "",
               "| Test | Horizon | n | Model | No-skill | p | Majority rule | Momentum | AUC | Brier skill |",
               "|---|---|---|---|---|---|---|---|---|---|"]

@@ -116,13 +116,31 @@ def test_saved_model_round_trips_and_predictor_guards_dates():
         out = pred.predict("Dogecoin is the people's crypto", posted_at="2021-02-04T08:00:00Z")
         assert set(out["horizon_d"]) == set(pred.models) and out["p_up"].between(0, 1).all()
         assert (out["anchor_date"] == pd.Timestamp("2021-02-03")).all()  # before 12:00 UTC -> previous close
-        last_close = pred.prep.prices.index.max()
-        try:
-            pred.predict("Doge", posted_at=last_close + pd.Timedelta(days=5))
-        except ValueError as e:
-            assert "No DOGE close" in str(e)
-        else:
-            raise AssertionError("expected a ValueError for a post after the last price")
+        last_close, first_close = pred.prep.prices.index.max(), pred.prep.prices.index.min()
+        for when, msg in [(last_close + pd.Timedelta(days=5), "No DOGE close"),
+                          (first_close - pd.Timedelta(days=5), "prices start"),
+                          (first_close + pd.Timedelta(days=2, hours=18), "Not enough price history")]:
+            try:
+                pred.predict("Doge", posted_at=when)
+            except ValueError as e:
+                assert msg in str(e), e
+            else:
+                raise AssertionError(f"expected a ValueError for a post at {when}")
+
+        # A bare date anchors to that day's close (date-only rule), not to the previous close as 00:00 UTC would.
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            out = pred.predict("Tesla will make some merch buyable with Doge", posted_at="2021-12-14")
+        assert (out["anchor_date"] == pd.Timestamp("2021-12-14")).all()
+
+        # Replaying the historical posts through the Predictor reproduces the training features exactly.
+        posts = pred.prep.posts
+        ref = M.build_event_features(posts, pred.prep.prices["close"], (1, 3, 7)).set_index("anchor_date")
+        rep = pred.features(posts[["text", "created_at", "message_type"]]).set_index("anchor_date")
+        assert np.allclose(rep[M.ALL_FEATURES], ref.loc[rep.index, M.ALL_FEATURES])
+        two = posts[posts["anchor_date"].isin(ref.index[[10, 14]])][["text", "created_at", "message_type"]]
+        assert np.allclose(pred.features(two)["gap_days_log"], ref["gap_days_log"].iloc[[10, 14]])
 
 
 if __name__ == "__main__":

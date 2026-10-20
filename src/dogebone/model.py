@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -170,6 +171,8 @@ class DirectionModel:
             w -= step
             if np.abs(step).max() < 1e-10:
                 break
+        else:
+            warnings.warn("Logistic fit did not converge in 100 Newton steps (separable data? raise l2).")
         self.intercept_, self.coef_ = float(w[0]), w[1:]
         self.base_rate_, self.n_train_ = float(y.mean()), int(len(y))
         self.train_start_, self.train_end_ = f"{d['anchor_date'].min():%Y-%m-%d}", f"{d['anchor_date'].max():%Y-%m-%d}"
@@ -273,28 +276,52 @@ def train_mask(events: pd.DataFrame, horizon: int, cutoff) -> pd.Series:
     return events["anchor_date"] + pd.Timedelta(days=horizon) < pd.Timestamp(cutoff)
 
 
+def _as_list(x, default=None) -> list:
+    """Accept one name/number or a list of them ('mom_7d' must not become ['m', 'o', ...])."""
+    if x is None:
+        return list(default or [])
+    return [x] if isinstance(x, (str, int, np.integer)) else list(x)
+
+
 def holdout(events: pd.DataFrame, horizon: int = 1, train_end: str = "2021-08-31", features=None,
             l2: float = DEFAULT_L2) -> tuple[DirectionModel, pd.DataFrame]:
     """Fit on post days whose outcome is known by `train_end`, predict every later post day once."""
     start = pd.Timestamp(train_end) + pd.Timedelta(days=1)
-    model = DirectionModel(horizon, list(features or ALL_FEATURES), l2).fit(events[train_mask(events, horizon, start)])
+    model = DirectionModel(horizon, _as_list(features, ALL_FEATURES), l2).fit(events[train_mask(events, horizon, start)])
     return model, _prediction_frame(model, events[events["anchor_date"] >= start], f"holdout from {start:%Y-%m-%d}")
 
 
 def walk_forward(events: pd.DataFrame, horizon: int = 1, features=None, l2: float = DEFAULT_L2,
                  first_test: str = "2021-03-01", end=None, min_train: int = 15) -> pd.DataFrame:
-    """Refit at the start of every month on all earlier post days with known outcomes; predict that month."""
-    feats = list(features or ALL_FEATURES)
+    """Refit at the start of every month on all earlier post days with known outcomes; predict that month.
+
+    Months with fewer than `min_train` earlier outcomes (or only one outcome class) are skipped. They're listed in
+    `result.attrs["skipped_months"]`, so write-ups can state the window that was actually tested.
+    """
+    feats = _as_list(features, ALL_FEATURES)
     end = pd.Timestamp(end) if end is not None else events["anchor_date"].max()
-    frames = []
+    frames, skipped = [], []
     for m in pd.date_range(pd.Timestamp(first_test), end, freq="MS"):
         test = events[(events["anchor_date"] >= m) & (events["anchor_date"] < m + pd.offsets.MonthBegin(1))]
         train = events[train_mask(events, horizon, m)]
         y = train[f"y_{horizon}d"].dropna()
-        if test.empty or len(y) < min_train or y.nunique() < 2:
+        if test.empty:
+            continue
+        if len(y) < min_train or y.nunique() < 2:
+            skipped.append(f"{m:%Y-%m} ({len(y)} earlier post days with outcomes, need {min_train})")
             continue
         frames.append(_prediction_frame(DirectionModel(horizon, feats, l2).fit(train), test, f"{m:%Y-%m}"))
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    out.attrs["skipped_months"] = skipped
+    return out
+
+
+def tested_window(preds: pd.DataFrame) -> str:
+    """'Apr–Dec 2021': the months a walk-forward run actually predicted."""
+    if preds.empty:
+        return "no months"
+    first, last = pd.Timestamp(f"{preds['fold'].min()}-01"), pd.Timestamp(f"{preds['fold'].max()}-01")
+    return f"{first:%b}–{last:%b %Y}" if first.year == last.year else f"{first:%b %Y}–{last:%b %Y}"
 
 
 def _auc(y: np.ndarray, p: np.ndarray) -> float:
@@ -375,12 +402,16 @@ def permutation_test(events: pd.DataFrame, horizon: int = 1, features=None, l2: 
     shuffle="text":    permute the text-feature block across post days, keeping market features and outcomes.
                        Do Musk's words add anything beyond the market state?
     """
-    feats = list(features or ALL_FEATURES)
+    feats = _as_list(features, ALL_FEATURES)
     obs = score_predictions(walk_forward(events, horizon, feats, l2, **wf_kw), horizon)
+    if not obs["n"]:
+        raise ValueError("walk_forward produced no out-of-sample predictions; check first_test / min_train.")
     if shuffle == "outcome":
         cols = [f"y_{horizon}d", f"fwd_ret_{horizon}d"]
     elif shuffle == "text":
         cols = [c for c in TEXT_FEATURES if c in feats]
+        if not cols:
+            raise ValueError("shuffle='text' needs at least one text feature in `features`.")
     else:
         raise ValueError("shuffle must be 'outcome' or 'text'")
     rng = np.random.default_rng(seed)
@@ -405,7 +436,7 @@ def permutation_test(events: pd.DataFrame, horizon: int = 1, features=None, l2: 
 
 def fit_final(events: pd.DataFrame, horizon: int, features=None, l2: float = DEFAULT_L2, **meta) -> DirectionModel:
     """Fit on every post day with a known outcome. This is the model you deploy, not the one you report skill for."""
-    m = DirectionModel(horizon, list(features or ALL_FEATURES), l2).fit(events)
+    m = DirectionModel(horizon, _as_list(features, ALL_FEATURES), l2).fit(events)
     m.meta.update(meta)
     return m
 
@@ -436,7 +467,8 @@ class Predictor:
 
     def features(self, posts, posted_at=None) -> pd.DataFrame:
         """Post-day feature rows for new posts: a string, a list of strings (same timestamp), or a DataFrame with
-        `text` and `created_at` columns. Outcome columns are filled in when the prices already cover them."""
+        `text` and `created_at` columns (optionally `message_type` = 'update' / 'reply', as in the training export;
+        otherwise a post starting with '@' counts as a reply). Outcome columns are filled in when prices cover them."""
         if isinstance(posts, str):
             posts = [posts]
         if not isinstance(posts, pd.DataFrame):
@@ -446,22 +478,41 @@ class Predictor:
         df = posts.copy()
         df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
         df["username"] = self.username
+        # A bare date ("2021-12-14") has no time of day: anchor like date-only exports do, not as 00:00 UTC.
+        date_only = bool((df["created_at"] == df["created_at"].dt.floor("D")).all())
+        if date_only:
+            warnings.warn(f"posted_at has no time of day; anchoring with '{self.prep.cfg.date_only_anchor_mode}'. "
+                          "Pass a UTC time (e.g. 2021-12-14T10:00:00Z) for the exact anchor close.")
         p = self.prep
-        scored = pipeline.score_posts(df, p.cfg, p.scorer, p.tagger, p.accounts)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # the date-only notice above already explains the anchoring
+            scored = pipeline.score_posts(df, p.cfg, p.scorer, p.tagger, p.accounts, date_only=date_only)
+        off_topic = scored["relevance"].eq("")
+        if off_topic.any():
+            warnings.warn(f"{int(off_topic.sum())} post(s) neither mention DOGE nor tag a DOGE account; the model was "
+                          "trained only on DOGE posts, so their calls are out of scope.")
         close = p.prices["close"]
-        last = scored["anchor_date"].max()
+        first, last = scored["anchor_date"].min(), scored["anchor_date"].max()
         if last > close.index.max():
             raise ValueError(
                 f"No DOGE close for {last:%Y-%m-%d} (prices end {close.index.max():%Y-%m-%d}). "
                 "Add newer daily prices to data/raw/prices/ so the market features can be computed."
             )
+        if first < close.index.min():
+            raise ValueError(f"No DOGE close for {first:%Y-%m-%d} (prices start {close.index.min():%Y-%m-%d}).")
         hist = p.posts.loc[p.posts["username"] == self.username, "anchor_date"]
-        hist = hist[hist < scored["anchor_date"].min()].unique()
-        return build_event_features(scored, close, tuple(self.models), self.username, prior_post_days=hist)
+        hist = hist[~hist.isin(scored["anchor_date"])].unique()  # past days only matter: the gap looks backward
+        ev = build_event_features(scored, close, tuple(self.models), self.username, prior_post_days=hist)
+        short = ev[ev[MARKET_FEATURES].isna().any(axis=1)]
+        if not short.empty:
+            raise ValueError(f"Not enough price history before {short['anchor_date'].min():%Y-%m-%d} for the market "
+                             "features (they need at least 10 earlier daily closes).")
+        return ev
 
     def predict(self, posts, posted_at=None, horizons=None) -> pd.DataFrame:
         """One row per (post day, horizon): P(up), the call, its conviction, and the top three reasons."""
         ev = self.features(posts, posted_at)
+        horizons = _as_list(horizons) or None
         rows = []
         for h, m in self.models.items():
             if horizons and h not in horizons:
