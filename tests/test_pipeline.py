@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from dogebone import Config  # noqa: E402
 from dogebone.lexicon import LexiconScorer  # noqa: E402
 from dogebone.market import anchor_dates, forward_returns  # noqa: E402
+from dogebone import model as M  # noqa: E402
+import numpy as np  # noqa: E402
 
 CFG = Config()
 SCORER = LexiconScorer(CFG)
@@ -51,6 +53,35 @@ def test_forward_returns_have_no_look_ahead():
     assert r.loc["2021-01-01", "fwd_ret_1d"] == 1.0  # 1 -> 2
     assert r.loc["2021-01-02", "mom_1d"] == 1.0  # 1 -> 2, known at the anchor close
     assert pd.isna(r.loc["2021-01-04", "fwd_ret_1d"])
+
+
+def test_model_features_ignore_future_prices():
+    px = pd.Series(np.linspace(1, 2, 60), index=pd.date_range("2021-01-01", periods=60))
+    bumped = px.copy()
+    bumped.iloc[40:] *= 3  # change only the future
+    a, b = M.market_features(px), M.market_features(bumped)
+    cols = ["mom_1d", "mom_7d", "vol_7d", "dd_30d"]
+    pd.testing.assert_frame_equal(a.loc[:"2021-02-09", cols], b.loc[:"2021-02-09", cols])
+
+
+def test_training_rows_never_overlap_the_test_period():
+    ev = pd.DataFrame({"anchor_date": pd.date_range("2021-08-20", periods=15)})
+    keep = ev[M.train_mask(ev, 7, "2021-09-01")]
+    assert (keep["anchor_date"] + pd.Timedelta(days=7) < pd.Timestamp("2021-09-01")).all()
+    assert keep["anchor_date"].max() == pd.Timestamp("2021-08-24")  # outcome close 08-31 is known before 09-01
+
+
+def test_logistic_regression_reaches_penalized_optimum():
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(200, 2))
+    y = (rng.random(200) < 1 / (1 + np.exp(-(0.3 + 1.5 * x[:, 0])))).astype(float)
+    ev = pd.DataFrame({"a": x[:, 0], "b": x[:, 1], "y_1d": y, "anchor_date": pd.date_range("2021-01-01", periods=200)})
+    m = M.DirectionModel(1, ["a", "b"], l2=2.0).fit(ev)
+    z = (x - m.mean_) / m.scale_
+    p = 1 / (1 + np.exp(-(m.intercept_ + z @ m.coef_)))
+    grad = np.r_[np.sum(p - y), z.T @ (p - y) + 2.0 * m.coef_]
+    assert np.abs(grad).max() < 1e-6
+    assert m.coef_[0] > 1.0 and abs(m.coef_[1]) < 0.3
 
 
 if __name__ == "__main__":

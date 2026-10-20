@@ -15,6 +15,9 @@ EMOJI_NOISE_RE = re.compile("[\U0001F3FB-\U0001F3FF︎️‍]")
 EMOJI_CLASS = "[\U0001F000-\U0001FAFF☀-➿⬀-⯿]"
 TOKEN_RE = re.compile(r"[$#@]?[a-z0-9]+(?:'[a-z]+)?|" + EMOJI_CLASS, re.IGNORECASE)
 ELONGATION_RE = re.compile(r"([a-z])\1{2,}", re.IGNORECASE)  # "moooon" -> "moon"
+# Same rules scripts/fetch_musk_tweets.py uses to decide that a post is DOGE-related.
+DOGE_TEXT_RE = re.compile(r"\bdoge|dogecoin|\$doge|🐕|much wow|such wow|\bshibes?\b|Ð", re.IGNORECASE)
+DOGE_HANDLE_RE = re.compile(r"@\w*doge\w*", re.IGNORECASE)
 
 STOPWORDS = frozenset(
     """a an the and or but if then so of to in on at by for with from as is are was were be been being am
@@ -57,6 +60,14 @@ def _is_content(tok: str) -> bool:
 def content_tokens(text: str) -> list[str]:
     """Tokens for keyword discovery: lowercase, no stopwords, no @mentions, no bare numbers."""
     return [t for t, _ in tokenize(text) if _is_content(t)]
+
+
+def doge_relevance(text: str) -> str:
+    """'text' if the post itself mentions DOGE, 'doge_account' if it only tags a DOGE account, else ''."""
+    body = re.sub(r"@\w+", " ", re.sub(r"https?://\S+|pic\.twitter\.com/\S+", " ", str(text)))
+    if DOGE_TEXT_RE.search(body):
+        return "text"
+    return "doge_account" if DOGE_HANDLE_RE.search(str(text)) else ""
 
 
 def ngrams(tokens: list[str], n_max: int = 2) -> set[str]:
