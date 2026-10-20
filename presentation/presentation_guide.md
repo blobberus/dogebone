@@ -1,111 +1,87 @@
 # Presentation guide: Dogebone in 2 minutes
 
-Read this 15 minutes before you go on. It covers what the project is, what's on each slide, what to say, and how to handle questions.
+Read this 15 minutes before you go on. It covers the numbers you'll say, what must land on each slide, and how to explain the work.
+The run-of-show, the word-for-word script and the Q&A answers are in [`README.md`](README.md).
 
-> **No results are written here.** Every `[BRACKET]` is filled from [`findings.md`](findings.md) after the final notebook run.
-> If `findings.md` or any chart still says **SYNTHETIC DATA** or **Pending real data**, stop: those numbers can't be presented.
+> **Results are final for this scope:** @elonmusk only, 105 DOGE posts on 69 post days, 2021. Every result number in this file is copied from
+> [`findings.md`](findings.md) (keyword list, notebook 01) or [`model_findings.md`](model_findings.md) (trained model, notebook 02).
+> If either notebook is re-run, re-check this table against those files. If anything says **SYNTHETIC DATA** or **Pending real data**, stop.
 
-## Fill-ins
+## The numbers you'll say
 
-| Placeholder | What it is | Where to get it |
+| What | Say it as | Source |
 |---|---|---|
-| `[WINDOW]` | **2021** (Jan 1 – Dec 31) | `findings.md` header line ("... *start* to *end*") |
-| `[TRAIN PERIOD]` / `[TEST PERIOD]` | **January to August 2021** / **September to December 2021** | `train_end` in the notebook's config cell: train runs up to that date and test starts the day after |
-| `[ACCOUNTS]` | **"Elon Musk"** (current data is Musk-only: 105 DOGE posts in 2021) | `findings.md` header ("by *N* accounts") and [`config/accounts.csv`](../config/accounts.csv) |
-| `[HIT RATE]`, `[NO-SKILL RATE]`, `[EDGE]`, `[P VALUE]`, `[N DAYS]` | The headline result for next-day calls. If the test period has fewer than 40 called days, `findings.md` leads with the full year and lists the train/test split underneath. Say which one you're quoting. | `findings.md` → Headline, first bullet |
-| `[HIGH-CONV RATE]`, `[LOW-CONV RATE]` | Hit rate on high- vs. low-conviction days | `findings.md` → "Conviction" bullet |
-| `[MOMENTUM RATE]` | Hit rate of "yesterday's direction continues" | `findings.md` → "Momentum check" bullet |
-| `[1D RATE]`, `[7D RATE]` | Hit rate at the 1-day and 7-day horizons | `findings.md` → "Horizon decay" bullet |
-| `[TOP KEYWORDS]` | Learned words that came before up-moves / down-moves | `findings.md` → "Keywords that preceded up-moves" bullet |
-| `[LEARNED RATE]`, `[LEXICON RATE]` | Test-period hit rate of the learned word list vs. the hand-built one | `findings.md` → "Hand-crafted vs. learned keywords" bullet |
-| `[EX-EVENTS RATE]` | Hit rate with ±2 days around each key event dropped | Notebook section 7, robustness cell (not in `findings.md`) |
+| Data | 105 Musk DOGE posts on 69 post days, 2021 | `model_findings.md`, header line |
+| **Headline: walk-forward**, 1-day (Apr–Dec, refit monthly) | **50% vs. 49%** no-skill, n = 52, p = 0.525 | `model_findings.md` → Headline, 1st bullet |
+| **Headline: held-out**, 1-day (trained Jan–Aug, tested Sep–Dec) | **20% vs. 40%** no-skill, n = 20, p = 0.982 | `model_findings.md` → Headline, 2nd bullet |
+| Posts with any sentiment word | 19 of 105 (18%) | `findings.md` → Coverage |
+| Post days the keyword list called | 17 of 69 | `findings.md` → Coverage |
+| Keyword list, full year, 1-day | 53% vs. 48% no-skill, n = 17, p = 0.437 | `findings.md` → Headline, 1st bullet |
+| The 3-day hint (walk-forward) | 62% vs. 49%, n = 52, p = 0.052; permutation p = 0.030 | `model_findings.md` → Every horizon table; Permutation tests |
+| The bar for three horizons | p below 0.017 (Bonferroni) | `model_findings.md` → note under the Every horizon table |
+| Sample-size caveat | about 50 test days per horizon, so a 10-point edge is within noise | `model_findings.md` → Caveats, 1st bullet |
 
-**Read `n` first.** With one account and one year, called days are few. If `findings.md` says "too few to conclude", say exactly that on stage.
+Every test result in this table is either "not distinguishable from chance" or misses the 0.017 bar. Say exactly that on stage.
 
 ---
 
 ## 1. The project
 
-**In one sentence:** Dogebone tests whether the words in posts from `[ACCOUNTS]` can call whether DOGE's price goes up or down the next day, and how much to trust each call, using an explainable keyword model tuned on `[TRAIN PERIOD]` and tested on `[TEST PERIOD]`.
+**In one sentence:** Dogebone tests whether Elon Musk's 2021 DOGE posts can call whether DOGE closes up or down a day later, and how much to trust each call,
+using an explainable keyword list and a small trained model, both scored on months they never saw.
 
-- **Problem.** DOGE is the clearest case of a market moved by social media: no cash flows, uncapped supply, and a 2021 run driven openly by posts and memes. The open question is whether the *words* carry a signal, or whether posts just echo the price.
-- **Approach.** A crypto keyword model (about 220 terms and emoji, plus rules for negation and hedging) turns each day's posts into a call (**UP / DOWN / no call**) with a **conviction** level (**LOW / MEDIUM / HIGH**). Those calls are scored on held-out data against a no-skill baseline and a momentum baseline.
-- **Why it's interesting.** Every call can be explained in one sentence, because it lists the words that drove it. It tests whether confidence is *calibrated*, not just whether the direction is right. And a clean "no" answer is a real finding too.
+- **Problem.** DOGE is the clearest case of a market moved by social media: no cash flows, uncapped supply, and a 2021 run driven openly by posts and memes. The open question is whether the posts carry a signal, or just echo the price.
+- **Approach.** Two tools, one pipeline:
+  1. **Keyword list** (notebook 01). A scored dictionary of crypto terms and emoji, with rules for negation and hedging, turns each post into a score from −1 to +1. A post day gets UP / DOWN / no call, with a conviction level.
+  2. **Trained model** (notebook 02, `src/dogebone/model.py`). An L2 logistic regression on each post day. Text features: the keyword score, whether any sentiment word was used, how many posts, the share saying "Doge" outright (vs. replies that only tag a DOGE account), original post vs. replies only, and days since the previous DOGE post. Market features: recent DOGE returns, recent volatility, and distance below the recent high. It outputs P(DOGE up) after 1, 3 and 7 days, then a call (UP / DOWN) and a conviction (LOW / MEDIUM / HIGH). Full feature list: [`models/README.md`](../models/README.md).
+- **How it was tested.** The features, the penalty, the horizons and the 1-day focus horizon were all fixed before testing. Then two tests:
+  - **Held-out:** train on Jan–Aug, predict every Sep–Dec post day once.
+  - **Walk-forward:** at each month start (Apr–Dec), refit on earlier post days whose outcome is already known, then predict that month.
+  - Baselines on the same days: the no-skill rate, always calling the training majority, and momentum.
+- **Why it's interesting.** Every call explains itself (the matched words, or the model's top features). The 1-day focus was chosen before testing, so the headline isn't cherry-picked. And a clean "no" is a real finding.
 
-## 2. Slide plan (1:50 total, 10 seconds of slack)
+## 2. What must land on each slide
 
-| # | Time | Takeaway title | On screen | Figure |
-|---|---|---|---|---|
-| 1 | 0:00–0:20 | **Can a tweet call Dogecoin's next move?** | Title, team names, the hook stat: "Dogefather" tease about +20%, "hustle" joke about −30% at the low (sources small: Newsweek, CNBC) | none |
-| 2 | 0:20–0:45 | **`[ACCOUNTS]` → keywords → a call with a conviction level** | 3-step graphic: *posts → keyword score → UP/DOWN + Low/Med/High*. Below it: "Tuned: `[TRAIN PERIOD]` · Tested: `[TEST PERIOD]`" | none (simple shapes) |
-| 3 | 0:45–1:10 | **Headline from `findings.md`** (strong or null version, see section 5) | Hero number `[HIT RATE]` vs. `[NO-SKILL RATE]`; small "n = `[N DAYS]` days, `[TEST PERIOD]`, out-of-sample" | `02_hit_rate_by_conviction.png`, cropped to the **1-day** panel |
-| 4 | 1:10–1:30 | **One supporting insight** (pick one, see below) | One chart, with an arrow on the line or bar that matters | `03_event_study.png` **or** `04_keywords.png` **or** `01_timeline.png` |
-| 5 | 1:30–1:50 | **A confidence signal, not a trading bot** | One caveat, one next step | none |
+1. **Hook.** Same person, different words, opposite moves. These are reported price moves from [`key_events.csv`](../data/reference/key_events.csv), not model output.
+2. **Method.** One picture: *posts → keyword score + how he posted + recent price → P(up) → call + conviction*. Define conviction once ("how sure it is").
+   Say "settings fixed first, tested on months it never saw." That's your strongest credibility line.
+3. **Headline.** Lead with walk-forward, the bigger test: 50% vs. 49%, n = 52. Then held-out in the same breath: 20% vs. 40%, over just 20 days.
+   Keep the held-out line at body size, not in a footnote. It's the worse number, and shrinking it costs credibility. Don't explain it away on stage; the reasons are in the Q&A.
+4. **Supporting insight: the posts are mostly wordless.** This is the most defensible insight because it's a count, not a test: 19 of 105 posts, 17 of 69 post days called. It also explains why the model reads *how* Musk posted, not only *what* he said.
+5. **Close.** One caveat (about 50 test days; a 10-point edge is within noise), the one hint (3-day: 62% vs. 49%, which misses the bar), one next step (more accounts, more years). Then "Thank you." Stop talking.
 
-Backup only (Q&A, never a main slide): `05_signal_vs_buy_and_hold.png`. It's an illustrative test-period equity curve with no trading costs.
+**Figure choices**
 
-**Talking points: what must land on each slide**
-
-1. **Hook.** Same person, different words, opposite moves. These are reported price moves from [`key_events.csv`](../data/reference/key_events.csv), not our model's output.
-2. **Method.** Name the accounts, give one slang example, and define conviction once. Say "tested on data it never saw." That's your strongest credibility line.
-3. **Headline.** One number and its baseline. Point at the HIGH bar and the no-skill line. Say whether conviction separated good calls from bad ones.
-4. **Supporting insight.** Choose by what the run shows:
-   - `03_event_study.png` if the bullish and bearish lines split **after** day 0 (posts lead price). This chart covers all of `[WINDOW]`, not just the test period, so don't call it out-of-sample.
-   - `04_keywords.png` if the learned words are intuitive. These are learned from `[TRAIN PERIOD]` only. The notebook skips this chart when there are too few posts, so check it's from the latest run.
-   - `01_timeline.png` if the edge lives in a few big Musk days. It shows price, high-conviction calls, and numbered key events.
-5. **Close.** One caveat said plainly, one next step, then "Thank you." Stop talking.
-
-## 3. Spoken script (about 240 words as written, about 260–270 once the brackets are spoken)
-
-> **[Slide 1]** In April 2021, Elon Musk posted he'd host SNL as "the Dogefather," and Dogecoin jumped about 20 percent.
-> On the show, he joked it was "a hustle," and it fell about 30 percent at its low. Can the words in these posts call DOGE's next move?
->
-> **[Slide 2]** We took every DOGE post from `[ACCOUNTS]` and scored it with a keyword model built for crypto slang.
-> It knows "to the moon" is bullish and "not bullish" isn't. Each day gets a call, up or down, and a conviction level:
-> how strong the words are. We tuned it on `[TRAIN PERIOD]`, then tested it, untouched, on `[TEST PERIOD]`.
->
-> **[Slide 3]** On `[TEST PERIOD]`, data the model never saw, it called the next day's direction right `[HIT RATE]` of the time,
-> over `[N DAYS]` days. A blind guesser making the same mix of up and down calls gets `[NO-SKILL RATE]`.
-> `[Strong: That's [EDGE] points better than chance. / Null: That's no better than chance.]`
-> And conviction `[mattered / didn't matter]`: high-conviction days hit `[HIGH-CONV RATE]`, low-conviction days `[LOW-CONV RATE]`.
->
-> **[Slide 4: say one]**
-> *Event study:* Here's the average DOGE price path around our calls: blue after bullish days, red after bearish ones.
-> The lines split `[after / before]` day zero, so the posts `[lead / mostly follow]` the price. And the edge `[fades / holds]`:
-> `[1D RATE]` next day, `[7D RATE]` a week out.
-> *Keywords:* We also let the data pick the words, using only `[TRAIN PERIOD]`. Before up-moves, the top words were
-> `[TOP KEYWORDS: up]`. Before down-moves, `[TOP KEYWORDS: down]`. On the test period those learned words hit
-> `[LEARNED RATE]`, vs. `[LEXICON RATE]` for our hand-built list.
-> *Timeline:* This is DOGE's price across `[WINDOW]`, with our high-conviction calls as dots and the big news days numbered.
-> Most of the signal sits on a few Musk days. Without them, the edge `[shrinks / holds]`: `[EX-EVENTS RATE]`.
->
-> **[Slide 5]** Two honest caveats. Daily prices blur a reaction that happens within minutes, and keywords can't read
-> memes, images or sarcasm. So treat this as a confidence signal, not a trading bot. Next, we'd add intraday prices,
-> image understanding, and an LLM scorer to compare against. Thank you.
-
-**If `[WINDOW]` doesn't include April–May 2021**, swap the hook for one inside the window. Every row below is sourced in `key_events.csv`:
-
-| Date (UTC) | Fact you can say | Source |
+| Figure | Use it for | Why |
 |---|---|---|
-| 2021-02-04 | A burst of Musk posts promoting DOGE as "the people's crypto" sent it up more than 50% on the day | CNN |
-| 2021-04-28 | Musk said he'd host SNL as "the Dogefather"; DOGE jumped about 20% | Newsweek |
-| 2021-05-09 | On SNL (aired May 8, ET), Musk joked DOGE was "a hustle"; it fell as much as about 30% | CNBC |
-| 2022-04-25 | Twitter's board accepted Musk's buyout; DOGE rose more than 20% that afternoon | CNBC |
+| `06_model_vs_baselines.png` | Slide 3, cropped to the 1-day bars. Full chart is the backup for the 3-day question. | The model bar sits on the no-skill line. Cropping keeps the 3-day bar from stealing the slide. |
+| `01_timeline.png` | Slide 4. Crop out its title. | A whole year of price with only a few dots: that's how rarely the keyword list fires. |
+| `07_model_heldout_calls.png` | Backup: "why is held-out worse?" | Every Sep–Dec post day: mostly DOWN calls during the slide, most of them wrong. |
+| `08_model_coefficients.png` | Backup: "what did it learn?" | Fit on all of 2021, so it's in-sample. It describes the model; it isn't evidence of skill. |
+| `02`–`05` | Backup only | Keyword-list charts with very small n (e.g. 5 high-conviction days). |
 
-## 4. The method for a non-technical judge (20 seconds)
+**Other slide-4 options** (only if you'd rather; both are less defensible than the coverage count):
 
-> "It's a scored dictionary of about 220 crypto words and emoji. We add up a post's words, flip anything negated, and shrink
-> anything hedged, like 'maybe'. Positive means up, negative means down, and the size is the conviction. We set it on
-> `[TRAIN PERIOD]` and judged it on `[TEST PERIOD]`. The bar isn't 50%. It's what a blind guesser with the same mix of ups and downs would score."
+- *The 3-day hint* (full `06` chart): 62% vs. 49%, and shuffling only the text features gives p = 0.030. Always add "but with three horizons the bar is 0.017." If you use it here, drop the hint from slide 5.
+- *The regime flip* (`07`): trained on the spring mania, the model called DOWN on most autumn post days and was mostly wrong. Present it as an explanation, not a test.
+
+## 3. Explaining the method to a non-technical judge (20 seconds)
+
+> "Two readers. The keyword list is a scored dictionary of crypto words and emoji. The model is a weighted checklist: how many posts,
+> did he say 'Doge' or just reply, was there any sentiment word, what did the price do last week. It adds the weights into a probability
+> that DOGE is up tomorrow. More likely up is an UP call; the more sure it is, the higher the conviction. We fixed it all first and judged it
+> on months it never saw. The bar isn't a coin flip. It's what a blind guesser with the same mix of ups and downs would score."
 
 | Piece | Plain English | Detail if asked |
 |---|---|---|
-| Keyword model | A dictionary with points: "to the moon" +3, "rug pull" −3.5, 🚀 +2.5 | `lexicons/sentiment_lexicon.csv`. Longest phrase wins, so "pump and dump" isn't scored as "pump". Rules follow VADER. |
-| Direction + conviction | Sign of the score → UP/DOWN. Strength → LOW/MED/HIGH. A daily call combines all of that day's posts | Conviction = score strength × account influence × "clearly about the coin". If Musk-only, the influence factor is the same for every post. |
-| Train/test split | Rules and cutoffs are set on the first part of `[WINDOW]`, then frozen and scored on the rest | Conviction cutoffs and learned keywords are fit on `[TRAIN PERIOD]` only |
-| No-skill baseline | If DOGE rose on most days and you always said "up," you'd look smart by luck. This is the rate to beat | The hit rate expected if calls were independent of outcomes, given how often we said UP and how often price rose |
+| Keyword list | A dictionary with points: "to the moon" +3, "rug pull" −3.5, 🚀 +2.5 | `lexicons/sentiment_lexicon.csv`. Longest phrase wins, so "pump and dump" isn't scored as "pump". Rules follow VADER. |
+| Post day | All of Musk's DOGE posts measured from the same daily close | Each post is anchored to the nearest daily close (at most 12h of overlap) |
+| Trained model | A weighted checklist that turns a post day into P(up) | L2 logistic regression, penalty 5, fixed in advance. Each weight is the push on the log-odds per SD of one feature. |
+| Call + conviction | More likely up means UP. LOW = P(up) between 40% and 60%; HIGH = at least 70% sure either way | Note under the conviction table in `model_findings.md` |
+| Two tests | Held-out: learn Jan–Aug, test Sep–Dec once. Walk-forward: relearn every month from the past only | Training rows need their outcome known before the test period starts, so no window crosses the line |
+| No-skill baseline | If DOGE rose most days and you always said "up," you'd look smart by luck. This is the rate to beat | The hit rate expected if calls ignored outcomes, given how often the model said UP and how often price rose |
 
-**One post, scored** (the project's own scorer, current lexicon; illustrative posts, not real ones):
+**One post, scored by the keyword list** (the project's own scorer, current lexicon; illustrative posts, not real ones):
 
 | Post | Words matched (points) | Score, −1 to +1 | Call |
 |---|---|---|---|
@@ -113,46 +89,35 @@ Backup only (Q&A, never a main slide): `05_signal_vs_buy_and_hold.png`. It's an 
 | "Maybe $DOGE to the moon?" | to the moon +3.0, then *maybe* and the `?` shrink it | **+0.44** | UP, weaker |
 | "Not bullish on $DOGE. Looks like a pump and dump." | bullish −2.2 (negated), pump and dump −3.0 | **−0.80** | DOWN, strong |
 
-Say it: *"'To the moon' is plus three and each rocket is plus two and a half, so it's strongly positive: an UP call. Add 'maybe' and a question mark, and the score roughly halves. It's still UP, but with lower conviction."*
-Which bucket (LOW/MED/HIGH) a post lands in depends on cutoffs fit on `[TRAIN PERIOD]`, so don't name a bucket for these examples.
-If the lexicon gets tuned, re-check them with `scorer.explain(...)` or notebook section 13.
+If the lexicon gets tuned, re-check these with `scorer.explain(...)` or notebook 01 section 13.
 
-## 5. Strong result vs. null result (both are fine)
+## 4. Framing the result: it's a null, and that's fine
 
-`findings.md` tells you which case you're in. Look for its exact wording:
+- **Say "no reliable evidence," not "it predicts" and not "it's useless."** Both 1-day tests are "not distinguishable from chance."
+- **Held-out below chance:** say it plainly, "20% vs. 40%, over just 20 days." Don't spin it.
+- **The 3-day hint is a lead, not a result.** p = 0.052 (permutation p = 0.030) misses the 0.017 bar for three horizons, and held-out 3-day was 55% vs. 52%. Never put it in a slide title.
+- **Conviction didn't separate good calls from bad.** Walk-forward HIGH-conviction calls hit 45% (n = 11) vs. 48% for LOW (n = 23). Don't claim the confidence levels work.
+- **Don't apologize.** A well-explained null beats an oversold result.
 
-| Case | How you know | Slide 3 title | What to say |
-|---|---|---|---|
-| **Strong** | Headline says "distinguishable from chance" **and** the momentum check says "beat" | "Calls were right `[HIT RATE]` of the time vs. `[NO-SKILL RATE]` by chance" | "On data it never saw, the words beat chance by `[EDGE]` points." Then keep it modest: "a signal, not a strategy." |
-| **Echo** | Beats no-skill, but the momentum check says "did **not** beat" | "The posts echoed price more than they led it" | "The words did better than chance, but no better than 'yesterday continues' (`[MOMENTUM RATE]`). The posts mostly follow the price." Use the event study on slide 4. |
-| **Null** | Headline says "**not** distinguishable from chance" | "Even famous DOGE posts didn't beat chance on `[TEST PERIOD]`" | "Once you account for how often DOGE rises anyway, the words didn't reliably call the next day. That's worth knowing. Two possible reasons we can't separate yet: the reaction happens in minutes, or posts follow price." |
+## 5. Questions to rehearse
 
-- If `findings.md` says "conviction did not clearly separate good calls from bad ones," say so in one clause and keep slide 3 on the main number.
-- If `[N DAYS]` is small (likely if the set is Musk-only), say "with only `[N DAYS]` days, treat this as a pilot."
-- With a null result, slides 3 and 4 stay the same and only the titles change. Don't apologize. A well-explained null beats an oversold result.
+All answers are in [`README.md`](README.md#qa-prep-likely-questions). Say these four out loud once before you go on:
+why is held-out worse than walk-forward; isn't 62% at three days a result; did you have look-ahead; why logistic regression.
 
-## 6. Three likely judge questions
+## 6. Don't
 
-| Question | Answer |
-|---|---|
-| "Isn't this just Elon?" | **10 accounts:** "Musk has the top influence weight (3.0 vs. 0.6–1.0 for the others), but every account is scored separately; the per-account table is in notebook section 7. Weight changes conviction, never direction." **Musk-only:** "Yes, by design. He's the account with documented price moves, and data for the others was thin. Adding them is next." |
-| "How do you know it isn't overfit or luck?" | "Conviction cutoffs and learned keywords were fit on `[TRAIN PERIOD]` only. The word list was never tuned on `[TEST PERIOD]` posts and was frozen before the final run. We test against the no-skill rate, not 50%, with a binomial test over `[N DAYS]` daily calls (p = `[P VALUE]`)." *If pressed:* a few hand-picked terms (e.g. "hustle") were inspired by famous 2021 moments, which is why we also test a word list learned only from `[TRAIN PERIOD]`. |
-| "Why keywords instead of ChatGPT or another LLM?" | "Explainability and speed. Every call lists the exact words behind it, so you can check any call in one sentence. An LLM scorer is the natural next comparison." |
-
-More Q&A (trading, why the baseline isn't 50%) is in [`README.md`](README.md#qa-prep-likely-questions).
-
-## 7. Don't
-
-- **Don't oversell.** No "predicts," "alpha," or "beats the market." Even a strong result is "a confidence signal, not a trading bot."
-- **Don't demo live.** Keep the notebook open in a tab for Q&A only.
-- **Don't show tables.** One hero number with its baseline, or one chart.
-- **Don't show a number without its baseline and n.** "`[HIT RATE]` vs. `[NO-SKILL RATE]`, n = `[N DAYS]`" always travel together.
-- **Don't type numbers from memory.** Copy them from the latest `findings.md`.
+- **Don't oversell.** No "predicts," "alpha," or "beats the market." The model is "not distinguishable from chance."
+- **Don't quote 62% without its caveat.** It always travels with "misses the bar for testing three horizons."
+- **Don't demo live in the 2 minutes.** For Q&A, keep a terminal open with `python scripts/predict.py "<post text>" --at <UTC time>` ready.
+- **Don't show tables on slides.** One hero number with its baseline, or one chart.
+- **Don't show a number without its baseline and n.** "50% vs. 49%, n = 52" and "20% vs. 40%, n = 20" always travel together.
+- **Don't type numbers from memory.** Copy them from the table at the top of this file.
 - **Don't present anything marked SYNTHETIC DATA**, and don't use `05_signal_vs_buy_and_hold.png` as a trading claim.
-- **Don't claim a "bear-market test".** The test is Sep–Dec 2021, a calmer market after the mania, not 2022.
+- **Don't present `08_model_coefficients.png` as a finding.** It's fit on all of 2021, and the model has no proven skill.
+- **Don't claim a "bear-market test".** Sep–Dec 2021 was a slow bleed after the mania, not 2022.
 - **Don't blur background and results.** The SNL moves are reported news, not model output.
 
-## 8. Formatting: the four rules that matter
+## 7. Formatting: the four rules that matter
 
 Everything else is in [`formatting_guide.md`](formatting_guide.md).
 
@@ -163,8 +128,8 @@ Everything else is in [`formatting_guide.md`](formatting_guide.md).
 
 ## Last check before you walk on
 
-- [ ] `findings.md` has no SYNTHETIC or Pending banner, and no chart has a watermark.
-- [ ] Every bracket is filled from the **latest** `findings.md`, and `[TEST PERIOD]` matches `train_end` (see the label trap above).
-- [ ] Slide 3 shows the result, the baseline, and `n`.
+- [ ] `findings.md` and `model_findings.md` have no SYNTHETIC or Pending banner, and no chart has a watermark.
+- [ ] Every number on a slide matches the table at the top of this file, and that table matches the latest findings files.
+- [ ] Slide 3 shows both tests, each with its baseline and `n`.
 - [ ] Slides open offline, with charts embedded.
 - [ ] Timed run-through at 1:50 or less. The first sentence is memorized.

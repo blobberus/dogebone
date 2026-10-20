@@ -151,7 +151,7 @@ Nothing was tuned on test months.
 | Test | Train | Predict |
 |---|---|---|
 | Held-out (pre-registered) | 2021 post days whose outcome close (anchor + h) falls on or before Aug 31 | Every Sep–Dec 2021 post day, once |
-| Walk-forward | At each month start, every earlier post day whose outcome is already known (purged, so no window straddles the boundary) | That month, Mar–Dec 2021 |
+| Walk-forward | At each month start, every earlier post day whose outcome is already known (purged, so no window straddles the boundary) | That month. Months with fewer than 15 earlier post days are skipped, so 2021 testing covers Apr–Dec. |
 
 Baselines are scored on the same days:
 
