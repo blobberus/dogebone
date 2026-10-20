@@ -1,6 +1,6 @@
 # Model findings (auto-drafted by notebooks/02_direction_model.ipynb)
 
-_Generated 2026-10-20 08:28 UTC from 105 @elonmusk DOGE posts on 69 post days, 2021-01-01 to 2021-12-31. Model: L2 logistic regression (penalty 5, fixed in advance) on post-day text and market features. Focus horizon: 1 day(s), chosen before testing._
+_Generated 2026-10-20 08:33 UTC from 105 @elonmusk DOGE posts on 69 post days, 2021-01-01 to 2021-12-31. Model: L2 logistic regression (penalty 5, fixed in advance) on post-day text and market features. Focus horizon: 1 day(s), chosen before testing._
 
 ## Headline
 
