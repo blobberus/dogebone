@@ -181,3 +181,135 @@ def write_findings(
     md = "\n".join(lines)
     Path(path).write_text(md, encoding="utf-8")
     return md
+
+
+def _model_sentence(m: pd.Series, h: int, label: str) -> str:
+    verdict = "distinguishable from chance" if m["p_value"] < 0.05 else "**not** distinguishable from chance"
+    return (
+        f"{label}: the model called the next-{h}-day direction right **{_pct(m['hit_rate'])}** of the time vs. "
+        f"**{_pct(m['null_hit_rate'])}** no-skill ({m['edge_pp']:+.1f} pp, p = {m['p_value']:.3f}, n = {int(m['n'])} post days; "
+        f"AUC {m['auc']:.2f}, Brier skill {m['brier_skill']:+.2f}): {verdict}."
+    )
+
+
+def _cell(s, width: int = 70) -> str:
+    s = " ".join(str(s).split()).replace("|", "/")
+    return s if len(s) <= width else s[: width - 1] + "…"
+
+
+def write_model_findings(
+    path: Path,
+    cfg: Config,
+    data_mode: str,
+    focus_h: int,
+    walk_forward: pd.DataFrame,
+    holdout: pd.DataFrame,
+    permutation: pd.DataFrame,
+    conviction: pd.DataFrame,
+    coefficients: pd.DataFrame,
+    test_preds: pd.DataFrame,
+    n_events: int,
+    n_posts: int,
+    figures: list[str],
+    l2: float,
+    first_test: str,
+) -> str:
+    """Draft presentation/model_findings.md from notebooks/02_direction_model.ipynb results."""
+    full = "text + market"
+    test_start = pd.Timestamp(cfg.train_end) + pd.Timedelta(days=1)
+    wf_label = f"Walk-forward ({pd.Timestamp(first_test):%b}–{pd.Timestamp(cfg.analysis_end):%b %Y}, refit monthly on earlier months only)"
+    ho_label = f"Held-out {test_start:%b}–{pd.Timestamp(cfg.analysis_end):%b %Y} (trained on {pd.Timestamp(cfg.analysis_start):%b}–{pd.Timestamp(cfg.train_end):%b} only)"
+    wf_head = _row(walk_forward, features=full, horizon_d=focus_h)
+    ho_head = _row(holdout, features=full, horizon_d=focus_h)
+
+    lines = []
+    if data_mode != "raw":
+        lines += ["> ## ⚠️ SYNTHETIC DATA: DO NOT PRESENT", "> These numbers come from `data/sample/`.", ""]
+    lines += [
+        "# Model findings (auto-drafted by notebooks/02_direction_model.ipynb)",
+        "",
+        f"_Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC from {n_posts} @elonmusk DOGE posts on {n_events} post days, "
+        f"{cfg.analysis_start} to {cfg.analysis_end}. Model: L2 logistic regression (penalty {l2:g}, fixed in advance) on "
+        f"post-day text and market features. Focus horizon: {focus_h} day(s), chosen before testing._",
+        "",
+        "## Headline",
+        "",
+    ]
+    for row, label in [(wf_head, wf_label), (ho_head, ho_label)]:
+        if row is not None and row["n"]:
+            lines.append(f"- {_model_sentence(row, focus_h, label)}")
+    if wf_head is not None and wf_head["n"]:
+        beat_mom = "beat" if wf_head["hit_rate"] > wf_head["momentum_hit_rate"] else "did **not** beat"
+        beat_maj = "beat" if wf_head["hit_rate"] > wf_head["majority_hit_rate"] else "did **not** beat"
+        lines.append(
+            f"- Against simple rules (walk-forward, {focus_h}d): the model {beat_maj} always calling the training majority "
+            f"({_pct(wf_head['majority_hit_rate'])}) and {beat_mom} momentum ({_pct(wf_head['momentum_hit_rate'])})."
+        )
+
+    lines += ["", "## Every horizon (text + market features)", "",
+              "| Test | Horizon | n | Model | No-skill | p | Majority rule | Momentum | AUC | Brier skill |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+    for name, table in [("walk-forward", walk_forward), ("held-out", holdout)]:
+        for r in table[table["features"] == full].sort_values("horizon_d").itertuples():
+            lines.append(
+                f"| {name} | {r.horizon_d}d | {r.n} | {_pct(r.hit_rate)} | {_pct(r.null_hit_rate)} | {r.p_value:.3f} | "
+                f"{_pct(r.majority_hit_rate)} | {_pct(r.momentum_hit_rate)} | {r.auc:.2f} | {r.brier_skill:+.2f} |"
+            )
+    n_tests = len(walk_forward[walk_forward["features"] == full])
+    lines += ["", f"_Three horizons were tested, so a single p below 0.05 is weak evidence: the Bonferroni bar is "
+              f"{0.05 / max(n_tests, 1):.3f}. A Brier skill above 0 means the probabilities beat the training base rate._", ""]
+
+    lines += ["## Is it the words or the market? (walk-forward)", "",
+              "| Features | " + " | ".join(f"{h}d hit / AUC" for h in sorted(walk_forward["horizon_d"].unique())) + " |",
+              "|---|" + "---|" * walk_forward["horizon_d"].nunique()]
+    for name, g in walk_forward.groupby("features", sort=False):
+        cells = [f"{_pct(r.hit_rate)} / {r.auc:.2f}" for r in g.sort_values("horizon_d").itertuples()]
+        lines.append(f"| {name} | " + " | ".join(cells) + " |")
+    lines.append("")
+    if permutation is not None and not permutation.empty:
+        lines += ["**Permutation tests** (walk-forward, text + market; p = share of shuffled runs at least as good):", ""]
+        for r in permutation.sort_values(["shuffle", "horizon_d"]).itertuples():
+            what = "outcomes shuffled (are any features informative?)" if r.shuffle == "outcome" else \
+                "Musk's text features shuffled, market kept (do the words add anything?)"
+            lines.append(f"- {r.horizon_d}d, {what}: hit-rate p = {r.p_hit_rate:.3f}, AUC p = {r.p_auc:.3f} "
+                         f"({r.n_perm} shuffles).")
+        lines.append("")
+
+    if conviction is not None and not conviction.empty:
+        lines += [f"## Does conviction mean anything? (walk-forward, {focus_h}d)", "",
+                  "| Conviction | n | Mean P(up) | Realized up-rate | Hit rate |", "|---|---|---|---|---|"]
+        for r in conviction.itertuples():
+            lines.append(f"| {r.conviction_bucket} | {r.n} | {_pct(r.mean_p_up)} | {_pct(r.realized_up_rate)} | {_pct(r.hit_rate)} |")
+        lines += ["", "_HIGH = the model is at least 70% sure either way; LOW = between 40% and 60%._", ""]
+
+    if coefficients is not None and not coefficients.empty:
+        lines += [f"## What the final {focus_h}d model learned (fit on all of {pd.Timestamp(cfg.analysis_start):%Y})", ""]
+        for r in coefficients.head(5).itertuples():
+            lines.append(f"- {r.label}: {r.coef_per_sd:+.2f} log-odds per SD ({'toward UP' if r.coef_per_sd > 0 else 'toward DOWN'}).")
+        lines.append("")
+
+    if test_preds is not None and not test_preds.empty:
+        lines += [f"## The held-out test, post day by post day ({focus_h}d)", "",
+                  "| Anchor close | First post that day | P(up) | Call | Conviction | Actual | |", "|---|---|---|---|---|---|---|"]
+        for r in test_preds.sort_values("anchor_date").itertuples():
+            mark = "" if r.actual is None else ("✅" if r.hit == 1 else "❌")
+            lines.append(f"| {r.anchor_date:%Y-%m-%d} | {_cell(str(r.texts).split(' | ')[0])} | {r.p_up:.0%} | {r.direction} | "
+                         f"{r.conviction_bucket} | {r.actual or 'n/a'} | {mark} |")
+        lines.append("")
+
+    lines += [
+        "## Caveats to say out loud",
+        "",
+        "- One account, one year: about 50 out-of-sample post days per horizon, so a 10-point edge is within noise.",
+        "- 2021 changed regime (mania to slow bleed). Relationships learned in Feb–May can flip by the autumn.",
+        "- Daily closes blur a minutes-scale reaction; posts are anchored to the nearest close (at most 12h of overlap).",
+        "- Features and the penalty were fixed before testing; nothing was tuned on the test months.",
+        "",
+        "## Figures exported for slides",
+        "",
+        *[f"- `{f}`" for f in figures],
+        "",
+    ]
+    md = "\n".join(lines)
+    Path(path).write_text(md, encoding="utf-8")
+    return md

@@ -1,0 +1,127 @@
+{
+  "model": "L2 logistic regression on Musk DOGE post days",
+  "horizon_days": 1,
+  "features": [
+    "lex_score",
+    "lex_any",
+    "n_posts_log",
+    "text_share",
+    "has_original",
+    "gap_days_log",
+    "mom_1d",
+    "mom_7d",
+    "vol_7d",
+    "dd_30d"
+  ],
+  "feature_labels": {
+    "lex_score": "Lexicon sentiment of the day's posts",
+    "lex_any": "Used any sentiment word",
+    "n_posts_log": "Number of DOGE posts that day",
+    "text_share": "Share of posts saying 'Doge' outright",
+    "has_original": "Has an original post (not only replies)",
+    "gap_days_log": "Days since the previous DOGE post day",
+    "mom_1d": "DOGE return, last 1 day",
+    "mom_7d": "DOGE return, last 7 days",
+    "vol_7d": "DOGE volatility, last 7 days",
+    "dd_30d": "Distance below the 30-day high"
+  },
+  "l2": 5.0,
+  "intercept": 0.1574115276721499,
+  "coef_per_sd": [
+    0.10774298132479977,
+    -0.23664301550698932,
+    -0.2475378708489944,
+    0.20766055056038765,
+    0.12336742317224178,
+    -0.09935155732196171,
+    -0.047067116514140694,
+    0.31726899822010546,
+    0.0733315840096569,
+    0.11101181980353253
+  ],
+  "train_mean": [
+    0.07518689629091463,
+    0.2608695652173913,
+    0.8749362356030785,
+    0.5550724637681159,
+    0.2753623188405797,
+    1.5078190083385845,
+    0.02225712487214503,
+    0.11222655526859411,
+    0.10058809493329346,
+    -0.2479889726720603
+  ],
+  "train_sd": [
+    0.21144058952783104,
+    0.4391089103635685,
+    0.29471600513858004,
+    0.4641695122838912,
+    0.4466966668818099,
+    0.7293067633355091,
+    0.11923069232317858,
+    0.6023692031702672,
+    0.09068440851548532,
+    0.15533856038604912
+  ],
+  "base_rate_up": 0.5362318840579711,
+  "n_train_days": 69,
+  "train_start": "2021-02-03",
+  "train_end": "2021-12-22",
+  "conviction_edges": [
+    0.2,
+    0.4
+  ],
+  "meta": {
+    "saved_utc": "2026-10-20T08:11:38Z",
+    "data_mode": "raw",
+    "account": "elonmusk",
+    "analysis_window": [
+      "2021-01-01",
+      "2021-12-31"
+    ],
+    "anchor_mode": "nearest_close",
+    "walk_forward_test": {
+      "horizon_d": 1,
+      "n": 52,
+      "hit_rate": 0.5,
+      "null_hit_rate": 0.4948,
+      "edge_pp": 0.5178,
+      "p_value": 0.5253,
+      "majority_hit_rate": 0.4808,
+      "momentum_hit_rate": 0.4038,
+      "up_rate": 0.5192,
+      "share_called_up": 0.3654,
+      "auc": 0.5156,
+      "brier": 0.2728,
+      "brier_ref": 0.2606,
+      "brier_skill": -0.0468,
+      "log_loss": 0.7439,
+      "mean_ret_when_up": 0.0718,
+      "mean_ret_when_down": 0.0148
+    },
+    "heldout_test": {
+      "horizon_d": 1,
+      "n": 20,
+      "hit_rate": 0.2,
+      "null_hit_rate": 0.395,
+      "edge_pp": -19.5,
+      "p_value": 0.9822,
+      "majority_hit_rate": 0.35,
+      "momentum_hit_rate": 0.3,
+      "up_rate": 0.65,
+      "share_called_up": 0.15,
+      "auc": 0.3626,
+      "brier": 0.3417,
+      "brier_ref": 0.2532,
+      "brier_skill": -0.3496,
+      "log_loss": 0.8881,
+      "mean_ret_when_up": -0.0292,
+      "mean_ret_when_down": 0.0298
+    },
+    "heldout_window": [
+      "2021-09-01",
+      "2021-12-31"
+    ],
+    "walk_forward_first_month": "2021-03-01"
+  }
+}

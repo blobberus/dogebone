@@ -187,3 +187,74 @@ def equity_curves(eq: pd.DataFrame, title: str = "Illustrative: following the da
     ax.legend(loc="upper left")
     fig.tight_layout()
     return fig
+
+
+# --- Trained model (notebooks/02_direction_model.ipynb) ---------------------------------------------------------
+
+
+def model_vs_baselines(table: pd.DataFrame, title: str = "Model hit rate vs. baselines (out-of-sample)"):
+    """table: one row per horizon with n, hit_rate, null_hit_rate, majority_hit_rate, momentum_hit_rate."""
+    t = table.sort_values("horizon_d").reset_index(drop=True)
+    fig, ax = plt.subplots(figsize=(8, 4.2))
+    width = 0.24
+    series = [("hit_rate", "Model", ACCENT), ("majority_hit_rate", "Always the training majority", MUTED),
+              ("momentum_hit_rate", "Momentum (last move continues)", AXIS)]
+    for j, (col, name, color) in enumerate(series):
+        xs = [i + (j - 1) * (width + 0.03) for i in range(len(t))]
+        ax.bar(xs, t[col], width=width, color=color, zorder=2, label=name)
+        if col == "hit_rate":  # label above the no-skill line too, so the two never collide
+            for x, v, null in zip(xs, t[col], t["null_hit_rate"]):
+                ax.text(x, max(v, null) + 0.02, f"{v:.0%}", ha="center", va="bottom", fontsize=9, color=INK,
+                        fontweight="bold")
+    for i, null in enumerate(t["null_hit_rate"]):
+        ax.hlines(null, i - 0.42, i + 0.42, color=INK, linewidth=1.4, zorder=3,
+                  label="No-skill rate" if i == 0 else None)
+    ax.set_xticks(range(len(t)), [f"{h}-day horizon\nn = {n} post days" for h, n in zip(t["horizon_d"], t["n"])])
+    ax.set_ylim(0, 1)
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+    ax.set_ylabel("Directional hit rate")
+    ax.grid(axis="x", visible=False)
+    ax.set_title(title, pad=30)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=4, borderaxespad=0.2, fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
+def model_coefficients(coef: pd.DataFrame, title: str = "What the model learned"):
+    """coef: DirectionModel.coefficients() -> label, coef_per_sd."""
+    c = coef.sort_values("coef_per_sd")
+    fig, ax = plt.subplots(figsize=(8, 0.38 * len(c) + 1.3))
+    ax.barh(c["label"], c["coef_per_sd"], height=0.6, color=[UP if v > 0 else DOWN for v in c["coef_per_sd"]], zorder=2)
+    ax.axvline(0, color=AXIS, linewidth=1)
+    for y, v in enumerate(c["coef_per_sd"]):
+        ax.text(v + (0.01 if v >= 0 else -0.01), y, f"{v:+.2f}", va="center", ha="left" if v >= 0 else "right",
+                fontsize=8.5, color=INK2)
+    lim = max(0.1, c["coef_per_sd"].abs().max() * 1.35)
+    ax.set_xlim(-lim, lim)
+    ax.set_xlabel("Push on the log-odds of UP per 1 SD of the feature  (blue = toward UP, red = toward DOWN)")
+    fig.suptitle(title, x=0.01, ha="left", fontsize=13, fontweight="bold", color=INK)  # long y labels: align to figure
+    ax.grid(axis="y", visible=False)
+    fig.tight_layout()
+    return fig
+
+
+def model_calls_timeline(returns: pd.DataFrame, preds: pd.DataFrame, start, end,
+                         title: str = "Model calls on the held-out months"):
+    """Price line with one marker per post day: triangle up/down = call, filled = right, hollow = wrong."""
+    fig, ax = plt.subplots(figsize=(11, 4.4))
+    px = returns.loc[start:end, "close"]
+    ax.plot(px.index, px.values, color=INK2, linewidth=1.6, label="DOGE close (USD)", zorder=1)
+    d = preds[preds["actual"].notna()]
+    for dir_, marker, color in [("UP", "^", UP), ("DOWN", "v", DOWN)]:
+        for hit, face, word in [(True, color, "right"), (False, SURFACE, "wrong")]:
+            s = d[(d["direction"] == dir_) & (d["hit"] == hit)]
+            if s.empty:
+                continue
+            ax.scatter(s["anchor_date"], s["close"], s=60 + 140 * s["conviction"], marker=marker, facecolor=face,
+                       edgecolor=color, linewidth=1.8, zorder=3, label=f"{DIR_LABELS[dir_].split()[0]} call, {word}")
+    ax.yaxis.set_major_formatter(FuncFormatter(_usd))
+    ax.set_ylabel("Close")
+    ax.set_title(title, pad=28)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=5, borderaxespad=0.2, fontsize=8.5)
+    fig.tight_layout()
+    return fig
