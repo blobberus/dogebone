@@ -1,6 +1,6 @@
 # Findings (auto-drafted by the notebook)
 
-_Generated 2026-10-18 20:01 UTC from 105 posts by 1 accounts, 2021-01-01 to 2021-12-31. Focus horizon: 1 day(s). Edit the wording before presenting, but keep the numbers in sync with the notebook._
+_Generated 2026-10-20 08:30 UTC from 105 posts by 1 accounts, 2021-01-01 to 2021-12-31. Focus horizon: 1 day(s). Edit the wording before presenting, but keep the numbers in sync with the notebook._
 
 ## Headline (use this as the slide-3 title)
 
